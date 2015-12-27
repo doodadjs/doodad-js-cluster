@@ -1,0 +1,47 @@
+{
+  "name": "doodad-js-cluster",
+  "version": "0.1.0",
+  "description": "Cluster module for \"doodad-js\"",
+  "homepage": "https://sourceforge.net/projects/doodad-js/",
+  "main": "index.js",
+  "files": [
+    "src",
+    "dist",
+    "NodeJs_Cluster.min.js",
+    "index.js",
+	"LICENSE"
+  ],
+  "scripts": {
+    "prepublish": "node -r \"doodad-js-make/make.js\" . make",
+    "configure": "node -r \"doodad-js-make/make.js\" . custom=configure"
+  },
+  "keywords": [
+	"doodad-js",
+	"cluster"
+  ],
+  "author": "Claude Petit <doodadjs@gmail.com> (https://sourceforge.net/projects/doodad-js/)",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=4.2.0 <5.4.0"
+  },
+  "repository": {
+    "type": "svn",
+    "url": "https://svn.code.sf.net/p/doodad-js/code/node_modules/doodad-js-cluster/"
+  },
+  "bugs": {
+    "url" : "https://sourceforge.net/p/doodad-js/tickets/",
+    "email" : "doodadjs@gmail.com"
+  },
+  "dependencies": {
+    "doodad-js": "^1.0.0",
+    "doodad-js-io": "^0.1.0",
+    "doodad-js-server": "^0.1.0",
+    "doodad-js-ipc": "^0.1.0"
+  },
+  "devDependencies": {
+    "doodad-js-make": "^0.1.0"
+  },
+  "publishConfig": {
+    "registry": "http://www.doodad-js.local:5984/"
+  }
+}
