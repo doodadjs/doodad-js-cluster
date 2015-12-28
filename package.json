@@ -41,8 +41,5 @@
   },
   "devDependencies": {
     "doodad-js-make": "^0.1.0"
-  },
-  "publishConfig": {
-    "registry": "http://www.doodad-js.local:5984/"
   }
 }
