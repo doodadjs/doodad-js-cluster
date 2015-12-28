@@ -1,7 +1,7 @@
 {
   "name": "doodad-js-cluster",
-  "version": "0.1.0",
-  "description": "Cluster module for \"doodad-js\"",
+  "version": "0.1.1",
+  "description": "\"doodad-js\" Cluster (alpha)",
   "homepage": "https://sourceforge.net/projects/doodad-js/",
   "main": "index.js",
   "files": [
@@ -9,15 +9,16 @@
     "dist",
     "NodeJs_Cluster.min.js",
     "index.js",
-	"LICENSE"
+    "README",
+    "LICENSE"
   ],
   "scripts": {
     "prepublish": "node -r \"doodad-js-make/make.js\" . make",
     "configure": "node -r \"doodad-js-make/make.js\" . custom=configure"
   },
   "keywords": [
-	"doodad-js",
-	"cluster"
+    "doodad-js",
+    "cluster"
   ],
   "author": "Claude Petit <doodadjs@gmail.com> (https://sourceforge.net/projects/doodad-js/)",
   "license": "Apache-2.0",
@@ -26,11 +27,11 @@
   },
   "repository": {
     "type": "svn",
-    "url": "https://svn.code.sf.net/p/doodad-js/code/node_modules/doodad-js-cluster/"
+    "url": "https://svn.code.sf.net/p/doodad-js/code/trunk/node_modules/doodad-js-cluster/"
   },
   "bugs": {
-    "url" : "https://sourceforge.net/p/doodad-js/tickets/",
-    "email" : "doodadjs@gmail.com"
+    "url": "https://sourceforge.net/p/doodad-js/tickets/",
+    "email": "doodadjs@gmail.com"
   },
   "dependencies": {
     "doodad-js": "^1.0.0",
