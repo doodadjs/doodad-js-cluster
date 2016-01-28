@@ -1,5 +1,5 @@
-//! REPLACE_BY("// Copyright 2015 Claude Petit, licensed under Apache License version 2.0\n")
-// dOOdad - Object-oriented programming framework with some extras
+//! REPLACE_BY("// Copyright 2016 Claude Petit, licensed under Apache License version 2.0\n")
+// dOOdad - Object-oriented programming framework
 // File: NodeJs_Cluster.js - Cluster tools extension for NodeJs
 // Project home: https://sourceforge.net/projects/doodad-js/
 // Trunk: svn checkout svn://svn.code.sf.net/p/doodad-js/code/trunk doodad-js-code
@@ -8,7 +8,7 @@
 // Note: I'm still in alpha-beta stage, so expect to find some bugs or incomplete parts !
 // License: Apache V2
 //
-//	Copyright 2015 Claude Petit
+//	Copyright 2016 Claude Petit
 //
 //	Licensed under the Apache License, Version 2.0 (the "License");
 //	you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 	var global = this;
 
 	var exports = {};
-	if (global.process) {
+	if (typeof process === 'object') {
 		module.exports = exports;
 	};
 	
@@ -35,9 +35,22 @@
 		DD_MODULES = (DD_MODULES || {});
 		DD_MODULES['Doodad.NodeJs.Cluster'] = {
 			type: null,
-			version: '0d',
+			version: '1.2d',
 			namespaces: null,
-			dependencies: ['Doodad.IO', 'Doodad.Server', 'Doodad.Server.Ipc'],
+			dependencies: [
+				{
+					name: 'Doodad.IO',
+					version: '0.2',
+				}, 
+				{
+					name: 'Doodad.Server',
+					version: '0.2',
+				}, 
+				{
+					name: 'Doodad.Server.Ipc',
+					version: '0.2',
+				},
+			],
 
 			create: function create(root, /*optional*/_options) {
 				"use strict";
@@ -47,7 +60,7 @@
 					tools = doodad.Tools,
 					files = tools.Files,
 					namespaces = doodad.Namespaces,
-					//mixIns = doodad.MixIns,
+					mixIns = doodad.MixIns,
 					//interfaces = doodad.Interfaces,
 					//extenders = doodad.Extenders,
 					io = doodad.IO,
@@ -65,6 +78,12 @@
 					
 					nodeCluster = require('cluster');
 
+				
+				const __Natives__ = {
+					globalSetImmediate: global.setImmediate,
+					processNextTick: process.nextTick,
+				};
+				
 				
 				nodejsCluster.ClusterMessageTypes = {
 					Request: 0,
@@ -116,10 +135,12 @@
 									ipcInterfaces.IServer,
 									ipcMixIns.IClient,
 									ioInterfaces.IConsole,
+									mixIns.NodeEvents,
 				{
 					$TYPE_NAME: 'ClusterMessenger',
 
-					__onMessageHandler: doodad.PROTECTED(  null  ),
+					defaultTTL: doodad.PUBLIC(  1000 * 60 * 60 * 2  ),  // Time To Live (milliseconds)
+					
 					__pending: doodad.PROTECTED(  null  ),
 					
 					create: doodad.OVERRIDE(function(service) {
@@ -143,19 +164,61 @@
 						this.__pending = {};
 					}),
 					
-					connect: doodad.OVERRIDE(function(/*optional*/options) {
-						const handler = new doodad.Callback(this, 'onNodeMessage');
+					connect: doodad.OVERRIDE(function connect(/*optional*/options) {
 						if (nodeCluster.isMaster) {
-							nodeCluster.on('message', handler);
+							this.onNodeMessage.attach(nodeCluster);
 						} else {
-							process.on('message', handler);
+							this.onNodeMessage.attach(process);
 						};
-						this.__onMessageHandler = handler;
+					}),
+						
+					createId: doodad.PROTECTED(function createId() {
+						let ok = false,
+							id;
+						for (var i = 0; i < 100; i++) {
+							id = tools.generateUUID();
+							if (!types.hasKey(this.__pending, id)) {
+								ok = true;
+								break;
+							};
+						};
+						if (!ok) {
+							throw new types.Error("Failed to generate an unique ID.");
+						};
+						return id;
+					}),
+					
+					purgePending: doodad.PROTECTED(function purgePending() {
+						const ids = types.keys(this.__pending);
+						for (var i = 0; i < ids.length; i++) {
+							const id = ids[i],
+								msg = this.__pending[id],
+								time = process.hrtime(msg.time),
+								diff = (time[0] * 1000) + (time[1] / 1e6);
+							if (diff >= msg.ttl) {
+								delete this.__pending[id];
+								if (msg.callback) {
+									try {
+										(function(msg) {
+											__Natives__.processNextTick(new doodad.Callback(this, function() {
+												msg.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[msg.worker] : process));
+											}));
+										})(msg);
+									} catch (ex) {
+										if (ex instanceof types.ScriptAbortedError) {
+											throw ex;
+										};
+										break;
+									};
+								};
+							};
+						};
 					}),
 
 					send: doodad.PUBLIC(function send(msg, /*optional*/options) {
 						const callback = types.get(options, 'callback'),
-							noResponse = types.get(options, 'noResponse');
+							noResponse = types.get(options, 'noResponse'),
+							ttl = types.get(options, 'ttl', this.defaultTTL);
 						if (noResponse) {
 							if (types.hasKey(this.__pending, msg.id)) {
 								delete this.__pending[msg.id];
@@ -183,27 +246,28 @@
 							const emitter = emitters[i],
 								worker = workers[i];
 							if (!msgId) {
-								msg.id = tools.generateUUID(); // TODO: Handle duplicated (can happen)
+								msg.id = this.createId();
 							};
 							const reqMsg = types.extend({}, msg);
 							reqMsg.worker = worker.id;
 							const proceedCallback = new doodad.Callback(this, function(result) {
 								reqMsg.proceedTime = process.hrtime();
-								noResponse && callback && callback(result);
+								noResponse && callback && callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 							});
 							const result = emitter.send(msg, null, proceedCallback);
 							// <PRB> Node v4 always returns "undefined". It has been fixed on Node v5.
 							if ((result === undefined) || result) {
 								if (!noResponse && callback) {
+									this.purgePending();
 									reqMsg.callback = callback;
-									reqMsg.time = (new Date()).valueOf();  // TODO: Purge pending requests
+									reqMsg.time = process.hrtime();
+									reqMsg.ttl = ttl;
 									this.__pending[reqMsg.id] = reqMsg;
 								};
 							} else {
-								// TODO: Test for congestion
 								if (callback) {
-									process.nextTick(new doodad.Callback(this, function() {
-										callback(new nodejsCluster.QueueLimitReached());
+									__Natives__.processNextTick(new doodad.Callback(this, function() {
+										callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 									}));
 								} else {
 									throw new nodejsCluster.QueueLimitReached();
@@ -231,27 +295,22 @@
 					}),
 					
 					disconnect: doodad.OVERRIDE(function disconnect() {
-						if (nodeCluster.isMaster) {
-							nodeCluster.removeListener('message', this.__onMessageHandler);
-						} else {
-							process.removeListener('message', this.__onMessageHandler);
-						};
-						this.__onMessageHandler = null;
+						this.onNodeMessage.clear();
 					}),
 
-					onNodeMessage: doodad.PROTECTED(function onNodeMessage(msg) {
+					onNodeMessage: doodad.NODE_EVENT('message', function onNodeMessage(context, msg) {
 						if (types.isObject(msg)) {
 							if ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify)) {
 								if (msg.method && !types.hasKey(this.__pending, msg.id)) {
 									const service = this.service,
 										params = doodad.PackedValue.$unpack(msg.params),
 										rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, msg.method, params/*, session*/);
-									setImmediate(new ipc.RequestCallback(rpcRequest, this, function setImmediateHandler() {
+									__Natives__.globalSetImmediate(new ipc.RequestCallback(rpcRequest, this, function setImmediateHandler() {
 										service.execute(rpcRequest);
 									}));
-									if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
-										this.__pending[msg.id] = msg;
-									};
+									//if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+										//this.__pending[msg.id] = msg;
+									//};
 								} else {
 									this.send({
 										id: msg.id,
@@ -263,8 +322,9 @@
 								if (msg.id && types.hasKey(this.__pending, msg.id)) {
 									const reqMsg = this.__pending[msg.id];
 									if (reqMsg.callback) {
+										delete this.__pending[reqMsg.id];
 										const result = doodad.PackedValue.$unpack(msg.result);
-										reqMsg.callback(result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
+										reqMsg.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Ping) {
@@ -278,8 +338,9 @@
 								if (nodeCluster.isMaster && msg.id && types.hasKey(this.__pending, msg.id)) {
 									const reqMsg = this.__pending[msg.id];
 									if (reqMsg.callback) {
+										delete this.__pending[reqMsg.id];
 										const time = process.hrtime(reqMsg.proceedTime);
-										reqMsg.callback(((time[0] * 1000) + (time[1] / 1e6)), nodeCluster.workers[reqMsg.worker]);
+										reqMsg.callback(null, ((time[0] * 1000) + (time[1] / 1e6)), nodeCluster.workers[reqMsg.worker]);
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Console) {
@@ -297,7 +358,6 @@
 					
 					
 					// Console hook
-					// TODO: Flood Protection
 					log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
 						if (nodeCluster.isWorker) {
 							this.__host.send({
@@ -355,8 +415,8 @@
 		return DD_MODULES;
 	};
 	
-	if (!global.process) {
+	if (typeof process !== 'object') {
 		// <PRB> export/import are not yet supported in browsers
 		global.DD_MODULES = exports.add(global.DD_MODULES);
 	};
-})();
+}).call((typeof global !== 'undefined') ? global : ((typeof window !== 'undefined') ? window : this));

@@ -1,4 +1,4 @@
-// dOOdad - Object-oriented programming framework with some extras
+// dOOdad - Object-oriented programming framework
 // File: index.js - Cluster module startup file
 // Project home: https://sourceforge.net/projects/doodad-js/
 // Trunk: svn checkout svn://svn.code.sf.net/p/doodad-js/code/trunk doodad-js-code
@@ -7,7 +7,7 @@
 // Note: I'm still in alpha-beta stage, so expect to find some bugs or incomplete parts !
 // License: Apache V2
 //
-//	Copyright 2015 Claude Petit
+//	Copyright 2016 Claude Petit
 //
 //	Licensed under the Apache License, Version 2.0 (the "License");
 //	you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 	var global = this;
 
 	var exports = {};
-	if (global.process) {
+	if (typeof process === 'object') {
 		module.exports = exports;
 	};
 	
@@ -46,7 +46,7 @@
 				var doodad = root.Doodad,
 					modules = doodad.Modules;
 				
-				var fromSource = root.startupOptions.settings.fromSource;
+				var fromSource = root.getOptions().settings.fromSource;
 				
 				return modules.load(MODULE_NAME, (fromSource ? 'src/server/NodeJs_Cluster.js' : 'NodeJs_Cluster.min.js'), _options);
 			},
@@ -54,8 +54,8 @@
 		return DD_MODULES;
 	};
 	
-	if (!global.process) {
+	if (typeof process !== 'object') {
 		// <PRB> export/import are not yet supported in browsers
 		global.DD_MODULES = exports.add(global.DD_MODULES);
 	};
-})();
+}).call((typeof global !== 'undefined') ? global : ((typeof window !== 'undefined') ? window : this));
