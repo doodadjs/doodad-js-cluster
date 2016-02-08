@@ -34,7 +34,7 @@
 	exports.add = function add(DD_MODULES) {
 		DD_MODULES = (DD_MODULES || {});
 		DD_MODULES[MODULE_NAME] = {
-			type: null,
+			type: 'Package',
 			version: '0b',
 			namespaces: null,
 			dependencies: ['Doodad.Modules'],
