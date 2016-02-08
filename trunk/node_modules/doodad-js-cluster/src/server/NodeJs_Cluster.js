@@ -194,7 +194,7 @@
 							const id = ids[i],
 								msg = this.__pending[id],
 								time = process.hrtime(msg.time),
-								diff = (time[0] * 1000) + (time[1] / 1e6);
+								diff = (time[0] + (time[1] / 1e9)) * 1e3;
 							if (diff >= msg.ttl) {
 								delete this.__pending[id];
 								if (msg.callback) {
@@ -340,7 +340,7 @@
 									if (reqMsg.callback) {
 										delete this.__pending[reqMsg.id];
 										const time = process.hrtime(reqMsg.proceedTime);
-										reqMsg.callback(null, ((time[0] * 1000) + (time[1] / 1e6)), nodeCluster.workers[reqMsg.worker]);
+										reqMsg.callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[reqMsg.worker]);
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Console) {
