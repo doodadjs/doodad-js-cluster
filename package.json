@@ -1,7 +1,7 @@
 {
   "name": "doodad-js-cluster",
-  "version": "1.2.2",
-  "description": "\"doodad-js\" Cluster (alpha)",
+  "version": "1.2.3",
+  "description": "Cluster manager (alpha)",
   "homepage": "https://sourceforge.net/projects/doodad-js/",
   "main": "index.js",
   "files": [
