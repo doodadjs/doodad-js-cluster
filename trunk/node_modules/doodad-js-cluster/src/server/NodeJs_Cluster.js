@@ -143,19 +143,21 @@
 					
 					__pending: doodad.PROTECTED(  null  ),
 					
-					create: doodad.OVERRIDE(function(service) {
-						if (types.isString(service)) {
-							service = namespaces.getNamespace(service);
-						};
-							
-						root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
+					create: doodad.OVERRIDE(function(/*optional*/service) {
+						if (!types.isNothing(service)) {
+							if (types.isString(service)) {
+								service = namespaces.getNamespace(service);
+							};
+								
+							root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
 
-						if (types.isType(service)) {
-							service = new service();
-							service = service.getInterface(ipcMixIns.Service);
+							if (types.isType(service)) {
+								service = new service();
+								service = service.getInterface(ipcMixIns.Service);
+							};
+								
+							root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Invalid service.");
 						};
-							
-						root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Invalid service.");
 
 						this._super();
 
@@ -300,10 +302,10 @@
 
 					onNodeMessage: doodad.NODE_EVENT('message', function onNodeMessage(context, msg) {
 						if (types.isObject(msg)) {
-							if ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify)) {
+							const service = this.service;
+							if (service && ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify))) {
 								if (msg.method && !types.hasKey(this.__pending, msg.id)) {
-									const service = this.service,
-										params = doodad.PackedValue.$unpack(msg.params),
+									const params = doodad.PackedValue.$unpack(msg.params),
 										rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, msg.method, params/*, session*/);
 									__Natives__.globalSetImmediate(new ipc.RequestCallback(rpcRequest, this, function setImmediateHandler() {
 										service.execute(rpcRequest);
@@ -347,8 +349,8 @@
 								if (nodeCluster.isMaster && msg.message) {
 									const messageType = types.get(msg, 'messageType');
 									if (['log', 'info', 'warn', 'error', 'exception'].indexOf(messageType) >= 0) {
-										const fn = console[messageType];
-										fn.call(console, msg.message);
+										const fn = global.console[messageType];
+										fn.call(global.console, msg.message);
 									};
 								};
 							};
