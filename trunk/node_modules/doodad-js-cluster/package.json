@@ -1,6 +1,6 @@
 {
   "name": "doodad-js-cluster",
-  "version": "1.2.3",
+  "version": "1.3.1",
   "description": "Cluster manager (alpha)",
   "homepage": "https://sourceforge.net/projects/doodad-js/",
   "main": "index.js",
@@ -36,13 +36,13 @@
     "email": "doodadjs@gmail.com"
   },
   "dependencies": {
-    "doodad-js": "^1.2.0",
-    "doodad-js-io": "^0.3.0",
-    "doodad-js-server": "^0.2.0",
-    "doodad-js-ipc": "^0.1.0"
+    "doodad-js": "^2.0.0",
+    "doodad-js-io": "^0.4.0",
+    "doodad-js-server": "^0.3.0",
+    "doodad-js-ipc": "^0.2.0"
   },
   "devDependencies": {
-    "doodad-js-make": "^0.1.0"
+    "doodad-js-make": "^0.3.0"
   },
   "tonicExampleFilename": "tonic.js",
   "browser": "./browserify.js"
