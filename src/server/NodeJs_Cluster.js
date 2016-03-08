@@ -35,20 +35,24 @@
 		DD_MODULES = (DD_MODULES || {});
 		DD_MODULES['Doodad.NodeJs.Cluster'] = {
 			type: null,
-			version: '1.2d',
+			version: '1.3.0d',
 			namespaces: null,
 			dependencies: [
 				{
+					name: 'Doodad',
+					version: '2.0.0',
+				}, 
+				{
 					name: 'Doodad.IO',
-					version: '0.2',
+					version: '0.4.0',
 				}, 
 				{
 					name: 'Doodad.Server',
-					version: '0.2',
+					version: '0.3.0',
 				}, 
 				{
 					name: 'Doodad.Server.Ipc',
-					version: '0.2',
+					version: '0.2.0',
 				},
 			],
 
@@ -105,7 +109,7 @@
 							root.DD_ASSERT(types.isObject(msg), "Invalid message.");
 						};
 						this._super(server, method, args, session);
-						this.setAttribute('msg', msg);
+						types.setAttribute(this, 'msg', msg);
 					}),
 					
 					end: doodad.OVERRIDE(function end(/*optional*/result) {
@@ -161,7 +165,7 @@
 
 						this._super();
 
-						this.setAttribute('service', service);
+						types.setAttribute(this, 'service', service);
 						
 						this.__pending = {};
 					}),
