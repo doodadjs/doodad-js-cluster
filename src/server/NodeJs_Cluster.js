@@ -35,16 +35,16 @@
 		DD_MODULES = (DD_MODULES || {});
 		DD_MODULES['Doodad.NodeJs.Cluster'] = {
 			type: null,
-			version: '1.3.0d',
+			version: '1.3.2a',
 			namespaces: null,
 			dependencies: [
 				{
 					name: 'Doodad',
-					version: '2.0.0',
+					version: '2.2.0',
 				}, 
 				{
 					name: 'Doodad.IO',
-					version: '0.4.0',
+					version: '1.0.0',
 				}, 
 				{
 					name: 'Doodad.Server',
@@ -397,15 +397,6 @@
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'error',
-							}, {noResponse: true});
-						};
-					}),
-					exception: doodad.OVERRIDE(ioInterfaces.IConsole, function exception(raw, /*optional*/options) {
-						if (nodeCluster.isWorker) {
-							this.__host.send({
-								type: nodejsCluster.ClusterMessageTypes.Console,
-								message: raw,
-								messageType: 'exception',
 							}, {noResponse: true});
 						};
 					}),
