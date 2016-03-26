@@ -35,26 +35,9 @@
 		DD_MODULES = (DD_MODULES || {});
 		DD_MODULES['Doodad.NodeJs.Cluster'] = {
 			type: null,
-			version: '1.3.2a',
+			//! INSERT("version:'" + VERSION('doodad-js-cluster') + "',")
 			namespaces: null,
-			dependencies: [
-				{
-					name: 'Doodad',
-					version: '2.2.0',
-				}, 
-				{
-					name: 'Doodad.IO',
-					version: '1.0.0',
-				}, 
-				{
-					name: 'Doodad.Server',
-					version: '0.3.0',
-				}, 
-				{
-					name: 'Doodad.Server.Ipc',
-					version: '0.2.0',
-				},
-			],
+			dependencies: null,
 
 			create: function create(root, /*optional*/_options) {
 				"use strict";
