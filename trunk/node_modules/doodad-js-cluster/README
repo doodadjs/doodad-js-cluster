@@ -55,7 +55,7 @@ If you want to load additional Doodad modules :
         // your code here...
     };
     
-    namespaces.loadNamespaces(modules, startup);
+    namespaces.load(modules, startup);
 ```
 
 ## Example (IPC) :
@@ -139,7 +139,7 @@ If you want to load additional Doodad modules :
         };
     };
     
-    namespaces.loadNamespaces(modules, startup);
+    namespaces.load(modules, startup);
 ```
 
 ## Example (Console) :
@@ -211,7 +211,7 @@ If you want to load additional Doodad modules :
         };
     };
 	
-    namespaces.loadNamespaces(modules, startup);
+    namespaces.load(modules, startup);
 ```
 
 ## Other available packages
