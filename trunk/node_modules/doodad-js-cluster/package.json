@@ -1,6 +1,6 @@
 {
   "name": "doodad-js-cluster",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "stage": "a",
   "description": "Cluster manager (alpha)",
   "files": [
