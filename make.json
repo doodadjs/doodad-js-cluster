@@ -27,28 +27,24 @@
 	"dependencies": [
 		{
 			"name": "doodad-js",
-			"optional": false,
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
 			"name": "doodad-js-io",
-			"optional": false,
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
 			"name": "doodad-js-server",
-			"optional": false,
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
 			"name": "doodad-js-ipc",
-			"optional": false,
 			"client": false,
 			"server": true,
 			"browserify": false

@@ -138,10 +138,9 @@
 						if (!types.isNothing(service)) {
 							if (types.isString(service)) {
 								service = namespaces.getNamespace(service);
+								root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
 							};
 								
-							root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
-
 							if (types.isType(service)) {
 								service = new service();
 								service = service.getInterface(ipcMixIns.Service);
@@ -209,8 +208,12 @@
 					}),
 
 					send: doodad.PUBLIC(function send(msg, /*optional*/options) {
-						const callback = types.get(options, 'callback'),
-							noResponse = types.get(options, 'noResponse'),
+						let callback = types.get(options, 'callback');
+						if (callback) {
+							const cbObj = types.get(options, 'callbackObj');
+							callback = new doodad.Callback(cbObj, callback);
+						};
+						const noResponse = types.get(options, 'noResponse'),
 							ttl = types.get(options, 'ttl', this.defaultTTL);
 						if (noResponse) {
 							if (types.hasKey(this.__pending, msg.id)) {
@@ -291,7 +294,13 @@
 						this.onNodeMessage.clear();
 					}),
 
-					onNodeMessage: doodad.NODE_EVENT('message', function onNodeMessage(context, msg) {
+					onNodeMessage: doodad.NODE_EVENT('message', function onNodeMessage(context, /*optional*/worker, msg, handle) {
+						// <PRB> Since Node.Js 6.0, a new argument ("worker") has been PREPENDED.
+						if (arguments.length <= 3) {
+							handle = msg;
+							msg = worker;
+							worker = undefined;
+						};
 						if (types.isObject(msg)) {
 							const service = this.service;
 							if (service && ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify))) {
