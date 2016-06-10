@@ -118,8 +118,8 @@
 				}));
 				
 
-				nodejsCluster.QueueLimitReached = types.createErrorType('QueueLimitReached', ipc.Error, function() {
-					ipc.Error.call(this, "Message queue limit reached.");
+				nodejsCluster.QueueLimitReached = types.createErrorType('QueueLimitReached', ipc.Error, function(/*optional*/message, /*optional*/params) {
+					ipc.Error.call(this, message || "Message queue limit reached.", params);
 				});
 				
 				nodejsCluster.REGISTER(doodad.Object.$extend(
@@ -169,7 +169,7 @@
 							id;
 						for (var i = 0; i < 100; i++) {
 							id = tools.generateUUID();
-							if (!types.hasKey(this.__pending, id)) {
+							if (!types.has(this.__pending, id)) {
 								ok = true;
 								break;
 							};
@@ -197,7 +197,7 @@
 											}));
 										})(msg);
 									} catch (ex) {
-										if (ex instanceof types.ScriptAbortedError) {
+										if (ex instanceof types.ScriptInterruptedError) {
 											throw ex;
 										};
 										break;
@@ -216,7 +216,7 @@
 						const noResponse = types.get(options, 'noResponse'),
 							ttl = types.get(options, 'ttl', this.defaultTTL);
 						if (noResponse) {
-							if (types.hasKey(this.__pending, msg.id)) {
+							if (types.has(this.__pending, msg.id)) {
 								delete this.__pending[msg.id];
 							};
 						};
@@ -304,7 +304,7 @@
 						if (types.isObject(msg)) {
 							const service = this.service;
 							if (service && ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify))) {
-								if (msg.method && !types.hasKey(this.__pending, msg.id)) {
+								if (msg.method && !types.has(this.__pending, msg.id)) {
 									const params = doodad.PackedValue.$unpack(msg.params),
 										rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, msg.method, params/*, session*/);
 									__Natives__.globalSetImmediate(new ipc.RequestCallback(rpcRequest, this, function setImmediateHandler() {
@@ -321,7 +321,7 @@
 									});
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Response) {
-								if (msg.id && types.hasKey(this.__pending, msg.id)) {
+								if (msg.id && types.has(this.__pending, msg.id)) {
 									const reqMsg = this.__pending[msg.id];
 									if (reqMsg.callback) {
 										delete this.__pending[reqMsg.id];
@@ -337,7 +337,7 @@
 									}, {noResponse: true});
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Pong) {
-								if (nodeCluster.isMaster && msg.id && types.hasKey(this.__pending, msg.id)) {
+								if (nodeCluster.isMaster && msg.id && types.has(this.__pending, msg.id)) {
 									const reqMsg = this.__pending[msg.id];
 									if (reqMsg.callback) {
 										delete this.__pending[reqMsg.id];
@@ -362,7 +362,7 @@
 					// Console hook
 					log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
 						if (nodeCluster.isWorker) {
-							this.__host.send({
+							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'log',
@@ -371,7 +371,7 @@
 					}),
 					info: doodad.OVERRIDE(ioInterfaces.IConsole, function info(raw, /*optional*/options) {
 						if (nodeCluster.isWorker) {
-							this.__host.send({
+							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'info',
@@ -380,7 +380,7 @@
 					}),
 					warn: doodad.OVERRIDE(ioInterfaces.IConsole, function warn(raw, /*optional*/options) {
 						if (nodeCluster.isWorker) {
-							this.__host.send({
+							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'warn',
@@ -389,7 +389,7 @@
 					}),
 					error: doodad.OVERRIDE(ioInterfaces.IConsole, function error(raw, /*optional*/options) {
 						if (nodeCluster.isWorker) {
-							this.__host.send({
+							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'error',
