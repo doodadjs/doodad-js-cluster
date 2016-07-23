@@ -43,7 +43,7 @@
 		DD_MODULES['Doodad.NodeJs.Cluster'] = {
 			version: /*! REPLACE_BY(TO_SOURCE(VERSION(MANIFEST("name")))) */ null /*! END_REPLACE() */,
 
-			create: function create(root, /*optional*/_options) {
+			create: function create(root, /*optional*/_options, _shared) {
 				"use strict";
 
 				const doodad = root.Doodad,
@@ -70,10 +70,10 @@
 					nodeCluster = require('cluster');
 
 				
-				const __Natives__ = {
+				types.complete(_shared.Natives, {
 					globalSetImmediate: global.setImmediate,
 					processNextTick: process.nextTick,
-				};
+				});
 				
 				
 				nodejsCluster.ClusterMessageTypes = {
@@ -91,27 +91,35 @@
 					
 					msg: doodad.PUBLIC(doodad.READ_ONLY(  null  )),
 					
+					__ended: doodad.PROTECTED(false),
+					
 					create: doodad.OVERRIDE(function(msg, server, method, /*optional*/args, /*optional*/session) {
 						if (root.DD_ASSERT) {
 							root.DD_ASSERT(types.isObject(msg), "Invalid message.");
 						};
 						this._super(server, method, args, session);
-						types.setAttribute(this, 'msg', msg);
+						_shared.setAttribute(this, 'msg', msg);
 					}),
 					
 					end: doodad.OVERRIDE(function end(/*optional*/result) {
-						if (this.msg.type === nodejsCluster.ClusterMessageTypes.Request) {
-							this.server.send({
-								id: this.msg.id,
-								type: nodejsCluster.ClusterMessageTypes.Response,
-								result: doodad.PackedValue.$pack(result),
-							}, {noResponse: true, worker: this.msg.worker});
+						if (!this.__ended) {
+							this.__ended = true;
+							if (this.msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+								this.server.send({
+									id: this.msg.id,
+									type: nodejsCluster.ClusterMessageTypes.Response,
+									result: doodad.PackedValue.$pack(result),
+								}, {noResponse: true, worker: this.msg.worker});
+							};
 						};
 						
 						throw new server.EndOfRequest();
 					}),
 
 					respondWithError: doodad.OVERRIDE(function respondWithError(ex) {
+						if (this.__ended) {
+							throw new server.EndOfRequest();
+						};
 						this.onError(new doodad.ErrorEvent(ex));
 						this.end(ex);
 					}),
@@ -137,7 +145,7 @@
 					create: doodad.OVERRIDE(function(/*optional*/service) {
 						if (!types.isNothing(service)) {
 							if (types.isString(service)) {
-								service = namespaces.getNamespace(service);
+								service = namespaces.get(service);
 								root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
 							};
 								
@@ -151,7 +159,7 @@
 
 						this._super();
 
-						types.setAttribute(this, 'service', service);
+						_shared.setAttribute(this, 'service', service);
 						
 						this.__pending = {};
 					}),
@@ -192,7 +200,7 @@
 								if (msg.callback) {
 									try {
 										(function(msg) {
-											__Natives__.processNextTick(new doodad.Callback(this, function() {
+											_shared.Natives.processNextTick(new doodad.Callback(this, function() {
 												msg.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[msg.worker] : process));
 											}));
 										})(msg);
@@ -262,7 +270,7 @@
 								};
 							} else {
 								if (callback) {
-									__Natives__.processNextTick(new doodad.Callback(this, function() {
+									_shared.Natives.processNextTick(new doodad.Callback(this, function() {
 										callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 									}));
 								} else {
@@ -307,9 +315,16 @@
 								if (msg.method && !types.has(this.__pending, msg.id)) {
 									const params = doodad.PackedValue.$unpack(msg.params),
 										rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, msg.method, params/*, session*/);
-									__Natives__.globalSetImmediate(new ipc.RequestCallback(rpcRequest, this, function setImmediateHandler() {
-										service.execute(rpcRequest);
-									}));
+									service.execute(rpcRequest)
+										.then(function endRequestPromise(result) {
+											rpcRequest.end(result);
+										})
+										.catch(rpcRequest.catchError)
+										.finally(function cleanupRequestPromise() {
+											if (!rpcRequest.isDestroyed()) {
+												rpcRequest.destroy();
+											};
+										});
 									//if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
 										//this.__pending[msg.id] = msg;
 									//};
