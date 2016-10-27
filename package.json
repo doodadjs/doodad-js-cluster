@@ -1,8 +1,7 @@
 {
   "name": "doodad-js-cluster",
-  "version": "2.0.0",
-  "stage": "a",
   "description": "Cluster manager (alpha)",
+  "version": "0.0.0",
   "files": [
 	"tonic.js"
   ],
