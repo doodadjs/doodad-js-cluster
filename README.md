@@ -16,48 +16,6 @@ $ npm install doodad-js-cluster
   -  Console to master.
   -  Ping workers.
 
-## Quick Start
-
-By default, Doodad is running in production mode, which disables every validations. You may want to activate the development mode by setting the "NODE_ENV" environment variable :
-
-Windows :
-```dos
-    set NODE_ENV=development
-```
-Linux :
-```bash
-    export NODE_ENV=development
-```
-Now create the root namespace :
-```js
-    const root = require('doodad-js').createRoot();
-```
-
-You can create a shortcut to the namespaces this way :
-```js
-    const doodad = root.Doodad,
-        types = doodad.Types,
-        tools = doodad.Tools,
-        namespaces = doodad.Namespaces;
-```
-
-If you want to load additional Doodad modules :
-```js
-    const modules = {};
-	require('doodad-js-io').add(modules);
-	require('doodad-js-server').add(modules);
-	require('doodad-js-ipc').add(modules);
-	require('doodad-js-cluster').add(modules);
-    
-    function startup() {
-        const nodejs = doodad.NodeJs,
-            cluster = nodejs.Cluster;
-        // your code here...
-    };
-    
-    namespaces.load(modules, startup);
-```
-
 ## Example (IPC) :
 
 # master.js
@@ -120,26 +78,23 @@ If you want to load additional Doodad modules :
 ```js
     const nodeJsCluster = require('cluster');
 
-    const root = require('doodad-js').createRoot();
-
-    const doodad = root.Doodad,
-        namespaces = doodad.Namespaces;
-
-    const modules = {};
+	const modules = {};
 	require('doodad-js-io').add(modules);
 	require('doodad-js-server').add(modules);
 	require('doodad-js-ipc').add(modules);
 	require('doodad-js-cluster').add(modules);
-    
-    function startup() {
-        if (nodeJsCluster.isMaster) {
-            require('./master.js').run(root);
-        } else {
-            require('./worker.js').run(root);
-        };
-    };
-    
-    namespaces.load(modules, startup);
+	
+    require('doodad-js').createRoot(modules)
+		.then(root => {
+			if (nodeJsCluster.isMaster) {
+				require('./master.js').run(root);
+			} else {
+				require('./worker.js').run(root);
+			};
+		})
+		.catch(err => {
+			console.error(err);
+		});
 ```
 
 ## Example (Console) :
@@ -192,10 +147,6 @@ If you want to load additional Doodad modules :
 # index.js
 ```js
     const nodeJsCluster = require('cluster');
-    const root = require('doodad-js').createRoot();
-
-    const doodad = root.Doodad,
-        namespaces = doodad.Namespaces;
 
     const modules = {};
 	require('doodad-js-io').add(modules);
@@ -203,15 +154,17 @@ If you want to load additional Doodad modules :
 	require('doodad-js-ipc').add(modules);
 	require('doodad-js-cluster').add(modules);
 	
-    function startup() {
-        if (nodeJsCluster.isMaster) {
-            require('./master.js').run(root);
-        } else {
-            require('./worker.js').run(root);
-        };
-    };
-	
-    namespaces.load(modules, startup);
+    require('doodad-js').createRoot(modules)
+		.then(root => {
+			if (nodeJsCluster.isMaster) {
+				require('./master.js').run(root);
+			} else {
+				require('./worker.js').run(root);
+			};
+		})
+		.catch(err => {
+			console.error(err);
+		});
 ```
 
 ## Other available packages
