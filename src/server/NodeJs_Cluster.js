@@ -186,7 +186,7 @@ module.exports = {
 								if (msg.callback) {
 									try {
 										(function(msg) {
-											_shared.Natives.processNextTick(new doodad.Callback(this, function() {
+											_shared.Natives.processNextTick(doodad.Callback(this, function() {
 												msg.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[msg.worker] : process));
 											}));
 										})(msg);
@@ -236,7 +236,7 @@ module.exports = {
 							};
 							const reqMsg = types.extend({}, msg);
 							reqMsg.worker = worker.id;
-							const proceedCallback = new doodad.Callback(this, function(result) {
+							const proceedCallback = doodad.Callback(this, function(result) {
 								reqMsg.proceedTime = process.hrtime();
 								noResponse && callback && callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 							});
@@ -252,7 +252,7 @@ module.exports = {
 								};
 							} else {
 								if (callback) {
-									_shared.Natives.processNextTick(new doodad.Callback(this, function() {
+									_shared.Natives.processNextTick(doodad.Callback(this, function() {
 										callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
 									}));
 								} else {
