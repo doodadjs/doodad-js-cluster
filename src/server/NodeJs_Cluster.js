@@ -62,14 +62,14 @@ module.exports = {
 				});
 				
 				
-				nodejsCluster.ClusterMessageTypes = {
+				nodejsCluster.ADD('ClusterMessageTypes', types.freezeObject(types.nullObject({
 					Request: 0,
 					Response: 1,
 					Notify: 2,
 					Console: 3,
 					Ping: 4,
 					Pong: 5,
-				};
+				})));
 				
 				nodejsCluster.REGISTER(ipc.Request.$extend(
 				{
