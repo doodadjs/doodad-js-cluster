@@ -113,7 +113,7 @@ module.exports = {
 				
 
 				nodejsCluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function(/*optional*/message, /*optional*/params) {
-					ipc.Error.call(this, message || "Message queue limit reached.", params);
+					this._super.call(this._this, message || "Message queue limit reached.", params);
 				}));
 				
 				nodejsCluster.REGISTER(doodad.Object.$extend(
