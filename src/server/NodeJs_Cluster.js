@@ -74,6 +74,7 @@ module.exports = {
 				nodejsCluster.REGISTER(ipc.Request.$extend(
 				{
 					$TYPE_NAME: 'ClusterMessengerRequest',
+					$TYPE_UUID: '' /*! INJECT('+' + TO_SOURCE(UUID('ClusterMessengerRequest')), true) */,
 					
 					msg: doodad.PUBLIC(doodad.READ_ONLY(  null  )),
 					
@@ -123,6 +124,7 @@ module.exports = {
 									mixIns.NodeEvents,
 				{
 					$TYPE_NAME: 'ClusterMessenger',
+					$TYPE_UUID: '' /*! INJECT('+' + TO_SOURCE(UUID('ClusterMessenger')), true) */,
 
 					defaultTTL: doodad.PUBLIC(  1000 * 60 * 60 * 2  ),  // Time To Live (milliseconds)
 					
