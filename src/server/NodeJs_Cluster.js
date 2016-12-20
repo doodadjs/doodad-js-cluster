@@ -218,8 +218,8 @@ module.exports = {
 										};
 									};
 								};
-							} else if (msg.ttl < minTTL) {
-								minTTL = msg.ttl;
+							} else if (msg.ttl - diff < minTTL) {
+								minTTL = msg.ttl - diff;
 							};
 						};
 						if (minTTL !== this.__purgeMinTTL) {
