@@ -59,6 +59,8 @@ module.exports = {
 				types.complete(_shared.Natives, {
 					globalSetImmediate: global.setImmediate,
 					processNextTick: process.nextTick,
+					windowSetTimeout: global.setTimeout,
+					windowClearTimeout: global.clearTimeout,
 				});
 				
 				
@@ -129,6 +131,8 @@ module.exports = {
 					defaultTTL: doodad.PUBLIC(  1000 * 60 * 60 * 2  ),  // Time To Live (milliseconds)
 					
 					__pending: doodad.PROTECTED(  null  ),
+					__purgeMinTTL: doodad.PROTECTED(  null  ),
+					__purgeTimeoutID: doodad.PROTECTED(  null  ),
 					
 					create: doodad.OVERRIDE(function(/*optional*/service) {
 						if (!types.isNothing(service)) {
@@ -149,7 +153,7 @@ module.exports = {
 
 						_shared.setAttribute(this, 'service', service);
 						
-						this.__pending = {};
+						this.__pending = types.nullObject();
 					}),
 					
 					connect: doodad.OVERRIDE(function connect(/*optional*/options) {
@@ -163,7 +167,7 @@ module.exports = {
 					createId: doodad.PROTECTED(function createId() {
 						let ok = false,
 							id;
-						for (var i = 0; i < 100; i++) {
+						for (var i = 0; i < 10; i++) {
 							id = tools.generateUUID();
 							if (!types.has(this.__pending, id)) {
 								ok = true;
@@ -178,6 +182,8 @@ module.exports = {
 					
 					purgePending: doodad.PROTECTED(function purgePending() {
 						const ids = types.keys(this.__pending);
+						const currentTTL = this.__purgeMinTTL || this.defaultTTL;
+						let minTTL = currentTTL;
 						for (var i = 0; i < ids.length; i++) {
 							const id = ids[i],
 								msg = this.__pending[id],
@@ -196,10 +202,22 @@ module.exports = {
 										if (ex instanceof types.ScriptInterruptedError) {
 											throw ex;
 										};
-										break;
 									};
 								};
+							} else if (msg.ttl < minTTL) {
+								minTTL = msg.ttl;
 							};
+						};
+						if (minTTL < currentTTL) {
+							if (this.__purgeTimeoutID) {
+								_shared.Natives.windowClearTimeout(this.__purgeTimeoutID);
+								this.__purgeTimeoutID = null;
+							};
+							this.__purgeTimeoutID = _shared.Natives.windowSetTimeout(doodad.Callback(this, function() {
+								this.__purgeMinTTL = 0;
+								this.purgePending();
+							}), minTTL);
+							this.__purgeMinTTL = minTTL;
 						};
 					}),
 
@@ -245,8 +263,8 @@ module.exports = {
 							const result = emitter.send(msg, null, proceedCallback);
 							// <PRB> Node v4 always returns "undefined". It has been fixed on Node v5.
 							if ((result === undefined) || result) {
+								this.purgePending();
 								if (!noResponse && callback) {
-									this.purgePending();
 									reqMsg.callback = callback;
 									reqMsg.time = process.hrtime();
 									reqMsg.ttl = ttl;
