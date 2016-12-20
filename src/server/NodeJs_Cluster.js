@@ -185,32 +185,27 @@ module.exports = {
 						let minTTL = this.__purgeMinTTL || this.defaultTTL;
 						for (let i = 0; i < ids.length; i++) {
 							const id = ids[i],
-								msg = this.__pending[id],
-								time = process.hrtime(msg.time),
+								req = this.__pending[id],
+								time = process.hrtime(req.time),
 								diff = (time[0] + (time[1] / 1e9)) * 1e3;
-							if (diff >= msg.ttl) {
+							if (diff >= req.options.ttl) {
 								delete this.__pending[id];
-								if (msg.retryDelay > 0) {
-									tools.callAsync(this.send, msg.retryDelay, this, [
-										msg,
-										{
-											worker: msg.worker,
-											ttl: msg.ttl,
-											retryDelay: msg.retryDelay,
-											callback: msg.callback,
-										}
+								if (req.options.retryDelay > 0) {
+									tools.callAsync(this.send, req.options.retryDelay, this, [
+										req.msg,
+										types.extend({}, req.options, {worker: req.worker})
 									]);
-									if (msg.ttl < minTTL) {
-										minTTL = msg.ttl;
+									if (req.options.ttl < minTTL) {
+										minTTL = req.options.ttl;
 									};
 								} else {
-									if (msg.callback) {
+									if (req.options.callback) {
 										try {
-											(function(msg) {
+											(function(req) {
 												_shared.Natives.processNextTick(doodad.Callback(this, function() {
-													msg.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[msg.worker] : process));
+													req.options.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
 												}));
-											})(msg);
+											})(req);
 										} catch (ex) {
 											if (ex instanceof types.ScriptInterruptedError) {
 												throw ex;
@@ -218,8 +213,8 @@ module.exports = {
 										};
 									};
 								};
-							} else if (msg.ttl - diff < minTTL) {
-								minTTL = msg.ttl - diff;
+							} else if (req.options.ttl - diff < minTTL) {
+								minTTL = req.options.ttl - diff;
 							};
 						};
 						if (minTTL !== this.__purgeMinTTL) {
@@ -247,20 +242,19 @@ module.exports = {
 					}),
 
 					send: doodad.PUBLIC(function send(msg, /*optional*/options) {
-						const callback = types.get(options, 'callback');
-						const noResponse = types.get(options, 'noResponse'),
-							ttl = types.get(options, 'ttl', this.defaultTTL),
-							retryDelay = types.get(options, 'retryDelay', 0);
-						if (noResponse) {
-							if (types.has(this.__pending, msg.id)) {
-								delete this.__pending[msg.id];
-							};
-						};
+						options = options || {};
+						const callback = types.getDefault(options, 'callback', null),
+							worker = types.getDefault(options, 'worker', null),
+							noResponse = types.getDefault(options, 'noResponse', false),
+							ttl = types.getDefault(options, 'ttl', this.defaultTTL),
+							retryDelay = types.getDefault(options, 'retryDelay', 0);
 						const msgId = msg.id;
+						if (msgId && (msgId in this.__pending)) {
+							throw new types.Error("Duplicated message ID.");
+						};
 						let emitters,
 							workers;
 						if (nodeCluster.isMaster) {
-							const worker = types.get(options, 'worker');
 							if (!msgId && types.isNothing(worker)) {
 								workers = emitters = types.values(nodeCluster.workers);
 							} else if (types.isInteger(worker)) {
@@ -278,38 +272,43 @@ module.exports = {
 						for (let i = 0; i < emitters.length; i++) {
 							const emitter = emitters[i],
 								worker = workers[i];
-							if (!msgId) {
-								msg.id = this.createId();
+							let id = msgId;
+							if (!id) {
+								id = this.createId();
 							};
-							const reqMsg = types.extend({}, msg);
-							reqMsg.worker = worker.id;
-							const proceedCallback = doodad.Callback(this, function(result) {
-								reqMsg.proceedTime = process.hrtime();
-								noResponse && callback && callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : nodeCluster.worker));
-							});
-							const result = emitter.send(msg, null, proceedCallback);
+							const req = {
+								msg: types.extend({}, msg, {id: id}),
+								worker: worker.id,
+								options: options,
+							};
+							const proceedCallback = function(req) {
+								return doodad.Callback(this, function(result) {
+									req.proceedTime = process.hrtime();
+									noResponse && req.options.callback && req.options.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
+								});
+							};
+							const result = emitter.send(req.msg, null, proceedCallback(req));
 							// <PRB> Node v4 always returns "undefined". It has been fixed on Node v5.
 							if ((result === undefined) || result) {
-								if (!noResponse && callback) {
-									reqMsg.callback = callback;
-									reqMsg.time = process.hrtime();
-									reqMsg.ttl = ttl;
-									reqMsg.retryDelay = retryDelay;
-									this.__pending[reqMsg.id] = reqMsg;
+								if (!noResponse) {
+									req.time = process.hrtime();
+									this.__pending[req.msg.id] = req;
+									ids.push(req.msg.id);
 								};
 								this.purgePending();
-								ids.push(reqMsg.id);
 							} else {
 								if (retryDelay > 0) {
 									tools.callAsync(this.send, retryDelay, this, [
-										reqMsg,
-										types.extend({}, options, {worker: reqMsg.worker})
+										req.msg,
+										types.extend({}, req.options, {worker: req.worker})
 									]);
 								} else {
 									if (callback) {
-										_shared.Natives.processNextTick(doodad.Callback(this, function() {
-											callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : nodeCluster.worker));
-										}));
+										(function(req) {
+											_shared.Natives.processNextTick(doodad.Callback(this, function() {
+												callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
+											}));
+										})(req);
 									} else {
 										throw new nodejsCluster.QueueLimitReached();
 									};
@@ -376,11 +375,11 @@ module.exports = {
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Response) {
 								if (msg.id && types.has(this.__pending, msg.id)) {
-									const reqMsg = this.__pending[msg.id];
-									if (reqMsg.callback) {
-										delete this.__pending[reqMsg.id];
+									const req = this.__pending[msg.id];
+									if (req.options.callback) {
+										delete this.__pending[msg.id];
 										const result = doodad.PackedValue.$unpack(msg.result);
-										reqMsg.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[reqMsg.worker] : process));
+										req.options.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Ping) {
@@ -392,19 +391,20 @@ module.exports = {
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Pong) {
 								if (nodeCluster.isMaster && msg.id && types.has(this.__pending, msg.id)) {
-									const reqMsg = this.__pending[msg.id];
-									if (reqMsg.callback) {
-										delete this.__pending[reqMsg.id];
-										const time = process.hrtime(reqMsg.proceedTime);
-										reqMsg.callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[reqMsg.worker]);
+									const req = this.__pending[msg.id];
+									if (req.options.callback) {
+										delete this.__pending[msg.id];
+										const time = process.hrtime(req.proceedTime);
+										req.options.callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[req.worker]);
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Console) {
-								if (nodeCluster.isMaster && msg.message) {
-									const messageType = types.get(msg, 'messageType');
+								const message = types.get(msg, 'message');
+								if (nodeCluster.isMaster && message) {
+									const messageType = types.get(msg, 'messageType', 'log');
 									if (['log', 'info', 'warn', 'error', 'exception'].indexOf(messageType) >= 0) {
 										const fn = global.console[messageType];
-										fn.call(global.console, msg.message);
+										fn.call(global.console, message);
 									};
 								};
 							};
@@ -415,7 +415,7 @@ module.exports = {
 					
 					// Console hook
 					log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
-						if (nodeCluster.isWorker) {
+						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
@@ -424,7 +424,7 @@ module.exports = {
 						};
 					}),
 					info: doodad.OVERRIDE(ioInterfaces.IConsole, function info(raw, /*optional*/options) {
-						if (nodeCluster.isWorker) {
+						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
@@ -433,7 +433,7 @@ module.exports = {
 						};
 					}),
 					warn: doodad.OVERRIDE(ioInterfaces.IConsole, function warn(raw, /*optional*/options) {
-						if (nodeCluster.isWorker) {
+						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
@@ -442,7 +442,7 @@ module.exports = {
 						};
 					}),
 					error: doodad.OVERRIDE(ioInterfaces.IConsole, function error(raw, /*optional*/options) {
-						if (nodeCluster.isWorker) {
+						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
 								type: nodejsCluster.ClusterMessageTypes.Console,
 								message: raw,
