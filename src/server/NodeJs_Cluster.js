@@ -242,13 +242,13 @@ module.exports = {
 					}),
 
 					send: doodad.PUBLIC(function send(msg, /*optional*/options) {
-						options = options || {};
+						options = types.nullObject(options);
 						const callback = types.getDefault(options, 'callback', null),
 							worker = types.getDefault(options, 'worker', null),
 							noResponse = types.getDefault(options, 'noResponse', false),
 							ttl = types.getDefault(options, 'ttl', this.defaultTTL),
 							retryDelay = types.getDefault(options, 'retryDelay', 0);
-						const msgId = msg.id;
+						const msgId = types.get(msg, 'id');
 						if (msgId && (msgId in this.__pending)) {
 							throw new types.Error("Duplicated message ID.");
 						};
@@ -276,11 +276,11 @@ module.exports = {
 							if (!id) {
 								id = this.createId();
 							};
-							const req = {
+							const req = types.nullObject({
 								msg: types.extend({}, msg, {id: id}),
 								worker: worker.id,
 								options: options,
-							};
+							});
 							const proceedCallback = function(req) {
 								return doodad.Callback(this, function(result) {
 									req.proceedTime = process.hrtime();
@@ -349,58 +349,63 @@ module.exports = {
 						};
 						if (types.isObject(msg)) {
 							const service = this.service;
-							if (service && ((msg.type === nodejsCluster.ClusterMessageTypes.Request) || (msg.type === nodejsCluster.ClusterMessageTypes.Notify))) {
-								if (msg.method && !types.has(this.__pending, msg.id)) {
-									const params = doodad.PackedValue.$unpack(msg.params),
-										rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, msg.method, params/*, session*/);
-									service.execute(rpcRequest)
-										.then(function endRequestPromise(result) {
-											rpcRequest.end(result);
-										})
-										.catch(rpcRequest.catchError)
-										.finally(function cleanupRequestPromise() {
-											if (!rpcRequest.isDestroyed()) {
-												rpcRequest.destroy();
-											};
-										});
-									//if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
-										//this.__pending[msg.id] = msg;
-									//};
-								} else {
-									this.send({
-										id: msg.id,
-										type: nodejsCluster.ClusterMessageTypes.Response,
-										result: doodad.PackedValue.$pack(new ipc.InvalidRequest()),
-									});
+							const id = types.get(msg, 'id');
+							const type = types.get(msg, 'type');
+							if (service && ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Notify))) {
+								if (!types.has(this.__pending, id)) {
+									const method = types.get(msg, 'method');
+									if (method) {
+										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
+											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, method, params/*, session*/);
+										service.execute(rpcRequest)
+											.then(function endRequestPromise(result) {
+												rpcRequest.end(result);
+											})
+											.catch(rpcRequest.catchError)
+											.finally(function cleanupRequestPromise() {
+												if (!rpcRequest.isDestroyed()) {
+													rpcRequest.destroy();
+												};
+											});
+										//if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+											//this.__pending[id] = msg;
+										//};
+									} else {
+										this.send({
+											id: id,
+											type: nodejsCluster.ClusterMessageTypes.Response,
+											result: doodad.PackedValue.$pack(new ipc.InvalidRequest()),
+										}, {noResponse: true});
+									};
 								};
-							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Response) {
-								if (msg.id && types.has(this.__pending, msg.id)) {
-									const req = this.__pending[msg.id];
+							} else if (type === nodejsCluster.ClusterMessageTypes.Response) {
+								if (id && types.has(this.__pending, id)) {
+									const req = this.__pending[id];
 									const callback = types.get(req.options, 'callback');
 									if (callback) {
-										delete this.__pending[msg.id];
+										delete this.__pending[id];
 										const result = doodad.PackedValue.$unpack(msg.result);
 										callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
 									};
 								};
-							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Ping) {
+							} else if (type === nodejsCluster.ClusterMessageTypes.Ping) {
 								if (nodeCluster.isWorker) {
 									this.send({
-										id: msg.id,
+										id: id,
 										type: nodejsCluster.ClusterMessageTypes.Pong,
 									}, {noResponse: true});
 								};
-							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Pong) {
-								if (nodeCluster.isMaster && msg.id && types.has(this.__pending, msg.id)) {
-									const req = this.__pending[msg.id];
+							} else if (type === nodejsCluster.ClusterMessageTypes.Pong) {
+								if (nodeCluster.isMaster && id && types.has(this.__pending, id)) {
+									const req = this.__pending[id];
 									const callback = types.get(req.options, 'callback');
 									if (callback) {
-										delete this.__pending[msg.id];
+										delete this.__pending[id];
 										const time = process.hrtime(req.proceedTime);
 										callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[req.worker]);
 									};
 								};
-							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Console) {
+							} else if (type === nodejsCluster.ClusterMessageTypes.Console) {
 								const message = types.get(msg, 'message');
 								if (nodeCluster.isMaster && message) {
 									const messageType = types.get(msg, 'messageType', 'log');
