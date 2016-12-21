@@ -376,10 +376,11 @@ module.exports = {
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Response) {
 								if (msg.id && types.has(this.__pending, msg.id)) {
 									const req = this.__pending[msg.id];
-									if (req.options.callback) {
+									const callback = types.get(req.options, 'callback');
+									if (callback) {
 										delete this.__pending[msg.id];
 										const result = doodad.PackedValue.$unpack(msg.result);
-										req.options.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
+										callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Ping) {
@@ -392,10 +393,11 @@ module.exports = {
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Pong) {
 								if (nodeCluster.isMaster && msg.id && types.has(this.__pending, msg.id)) {
 									const req = this.__pending[msg.id];
-									if (req.options.callback) {
+									const callback = types.get(req.options, 'callback');
+									if (callback) {
 										delete this.__pending[msg.id];
 										const time = process.hrtime(req.proceedTime);
-										req.options.callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[req.worker]);
+										callback(null, (time[0] + (time[1] / 1e9)) * 1e3, nodeCluster.workers[req.worker]);
 									};
 								};
 							} else if (msg.type === nodejsCluster.ClusterMessageTypes.Console) {
