@@ -363,9 +363,7 @@ module.exports = {
 											})
 											.catch(rpcRequest.catchError)
 											.finally(function cleanupRequestPromise() {
-												if (!rpcRequest.isDestroyed()) {
-													rpcRequest.destroy();
-												};
+												types.DESTROY(rpcRequest);
 											});
 										//if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
 											//this.__pending[id] = msg;
