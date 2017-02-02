@@ -272,45 +272,47 @@ module.exports = {
 						for (let i = 0; i < emitters.length; i++) {
 							const emitter = emitters[i],
 								worker = workers[i];
-							let id = msgId;
-							if (!id) {
-								id = this.createId();
-							};
-							const req = types.nullObject({
-								msg: types.extend({}, msg, {id: id}),
-								worker: worker.id,
-								options: options,
-							});
-							const proceedCallback = function(req) {
-								return doodad.Callback(this, function(result) {
-									req.proceedTime = process.hrtime();
-									noResponse && req.options.callback && req.options.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
-								});
-							};
-							const result = emitter.send(req.msg, null, proceedCallback(req));
-							// <PRB> Node v4 always returns "undefined". It has been fixed on Node v5.
-							if ((result === undefined) || result) {
-								if (!noResponse) {
-									req.time = process.hrtime();
-									this.__pending[req.msg.id] = req;
-									ids.push(req.msg.id);
+							if (emitter && worker) {
+								let id = msgId;
+								if (!id) {
+									id = this.createId();
 								};
-								this.purgePending();
-							} else {
-								if (retryDelay > 0) {
-									tools.callAsync(this.send, retryDelay, this, [
-										req.msg,
-										types.extend({}, req.options, {worker: req.worker})
-									]);
+								const req = types.nullObject({
+									msg: types.extend({}, msg, {id: id}),
+									worker: worker.id,
+									options: options,
+								});
+								const proceedCallback = function(req) {
+									return doodad.Callback(this, function(result) {
+										req.proceedTime = process.hrtime();
+										noResponse && req.options.callback && req.options.callback(null, result, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
+									});
+								};
+								const result = emitter.send(req.msg, null, proceedCallback(req));
+								// <PRB> Node v4 always returns "undefined". It has been fixed on Node v5.
+								if ((result === undefined) || result) {
+									if (!noResponse) {
+										req.time = process.hrtime();
+										this.__pending[req.msg.id] = req;
+										ids.push(req.msg.id);
+									};
+									this.purgePending();
 								} else {
-									if (callback) {
-										(function(req) {
-											_shared.Natives.processNextTick(doodad.Callback(this, function() {
-												callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
-											}));
-										})(req);
+									if (retryDelay > 0) {
+										tools.callAsync(this.send, retryDelay, this, [
+											req.msg,
+											types.extend({}, req.options, {worker: req.worker})
+										]);
 									} else {
-										throw new nodejsCluster.QueueLimitReached();
+										if (callback) {
+											(function(req) {
+												_shared.Natives.processNextTick(doodad.Callback(this, function() {
+													callback(new nodejsCluster.QueueLimitReached(), null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker));
+												}));
+											})(req);
+										} else {
+											throw new nodejsCluster.QueueLimitReached();
+										};
 									};
 								};
 							};
