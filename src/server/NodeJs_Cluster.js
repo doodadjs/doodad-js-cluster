@@ -109,8 +109,16 @@ module.exports = {
 						if (this.__ended) {
 							throw new server.EndOfRequest();
 						};
-						this.onError(new doodad.ErrorEvent(ex));
-						this.end(ex);
+
+						if (ex.critical) {
+							throw ex;
+						} else if (!ex.bubble) {
+							ex.trapped = true;
+
+							this.onError(ex);
+
+							this.end(ex);
+						};
 					}),
 				}));
 				
