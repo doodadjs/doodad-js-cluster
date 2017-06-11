@@ -94,10 +94,15 @@ module.exports = {
 						if (!this.__ended) {
 							this.__ended = true;
 							if (this.msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+								try {
+									result = doodad.PackedValue.$pack(result);
+								} catch(ex) {
+									result = doodad.PackedValue.$pack(ex);
+								};
 								this.server.send({
 									id: this.msg.id,
 									type: nodejsCluster.ClusterMessageTypes.Response,
-									result: doodad.PackedValue.$pack(result),
+									result: result,
 								}, {noResponse: true, worker: this.msg.worker});
 							};
 						};
