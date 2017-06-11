@@ -366,7 +366,7 @@ module.exports = {
 									const method = types.get(msg, 'method');
 									if (method) {
 										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
-											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, /*, session*/);
+											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this /*, session*/);
 										service.execute(rpcRequest, method, params)
 											.then(function endRequestPromise(result) {
 												return rpcRequest.end(result);
