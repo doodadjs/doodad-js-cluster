@@ -364,7 +364,7 @@ module.exports = {
 									if (asyncId) {
 										asyncId.cancel();
 									};
-									result['W:' + worker.id] = err || res;
+									result[worker.id] = err || res;
 									count--;
 									if (count <= 0) {
 										resolve(result);
