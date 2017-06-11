@@ -82,11 +82,11 @@ module.exports = {
 					
 					__ended: doodad.PROTECTED(false),
 					
-					create: doodad.OVERRIDE(function(msg, server, method, /*optional*/args, /*optional*/session) {
+					create: doodad.OVERRIDE(function(msg, server, /*optional*/session) {
 						if (root.DD_ASSERT) {
 							root.DD_ASSERT(types.isObject(msg), "Invalid message.");
 						};
-						this._super(server, method, args, session);
+						this._super(server, session);
 						_shared.setAttribute(this, 'msg', msg);
 					}),
 					
@@ -117,7 +117,7 @@ module.exports = {
 
 							this.onError(ex);
 
-							this.end(ex);
+							return this.end(ex);
 						};
 					}),
 				}));
@@ -366,10 +366,10 @@ module.exports = {
 									const method = types.get(msg, 'method');
 									if (method) {
 										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
-											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, method, params/*, session*/);
-										service.execute(rpcRequest)
+											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this, /*, session*/);
+										service.execute(rpcRequest, method, params)
 											.then(function endRequestPromise(result) {
-												rpcRequest.end(result);
+												return rpcRequest.end(result);
 											})
 											.catch(rpcRequest.catchError)
 											.finally(function cleanupRequestPromise() {
