@@ -328,24 +328,65 @@ module.exports = {
 										};
 									};
 								};
+							} else {
+								throw new ipc.Error("Invalid request.");
 							};
 						};
 						return ids;
 					}),
 					
+					sendAsync: doodad.PUBLIC(doodad.ASYNC(function sendAsync(msg, /*optional*/options) {
+						const Promise = types.getPromise();
+						return Promise.create(function sendAsyncPromise(resolve, reject) {
+							const type = types.get(msg, 'type');
+							if (type === nodejsCluster.ClusterMessageTypes.Notify) {
+								this.send(msg, options);
+								resolve();
+							} else {
+								const timeout = types.get(options, 'timeout');
+								const worker = types.get(options, 'worker');
+								const result = {};
+								let ids = null;
+								let asyncId = null;
+								let count = 1;
+								if (!types.isNothing(timeout)) {
+									asyncId = tools.callAsync(function() {
+										this.cancel(ids);
+										reject(new types.TimeoutError());
+									}, timeout, this, null, true);
+								};
+								if (types.isNothing(worker)) {
+									count = types.keys(nodeCluster.workers).length;
+								} else if (types.isArray(worker)) {
+									count = worker.length;
+								};
+								const callback = function(err, res, worker) {
+									if (asyncId) {
+										asyncId.cancel();
+									};
+									result['W:' + worker.id] = err || res;
+									count--;
+									if (count <= 0) {
+										resolve(result);
+									};
+								};
+								ids = this.send(msg, types.extend({}, options, {callback: callback}));
+							};
+						}, this);
+					})),
+
 					callMethod: doodad.OVERRIDE(function callMethod(method, /*optional*/args, /*optional*/options) {
 						const noResponse = types.get(options, 'noResponse');
-						const msg = {
-								type: (noResponse ? nodejsCluster.ClusterMessageTypes.Notify : nodejsCluster.ClusterMessageTypes.Request),
-								method: method,
-								params: doodad.PackedValue.$pack(args),
-							};
-						return this.send(msg, options);
+						return this.sendAsync({
+							type: (noResponse ? nodejsCluster.ClusterMessageTypes.Notify : nodejsCluster.ClusterMessageTypes.Request),
+							method: method,
+							params: doodad.PackedValue.$pack(args),
+						}, options);
 					}),
 					
 					ping: doodad.PUBLIC(function ping(/*optional*/options) {
 						if (nodeCluster.isMaster) {
-							return this.send({
+							return this.sendAsync({
 								type: nodejsCluster.ClusterMessageTypes.Ping,
 							}, options);
 						};
@@ -373,8 +414,13 @@ module.exports = {
 										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
 											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this /*, session*/);
 										service.execute(rpcRequest, method, params)
-											.then(function endRequestPromise(result) {
-												return rpcRequest.end(result);
+											.nodeify(function endRequestPromise(err, result) {
+												return rpcRequest.end(err || result)
+													.nodeify(function(err2, dummy) {
+														if (err || err2) {
+															throw err || err2;
+														};
+													});
 											})
 											.catch(rpcRequest.catchError)
 											.nodeify(function cleanupRequestPromise(err, dummy) {
