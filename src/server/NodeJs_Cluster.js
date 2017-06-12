@@ -212,11 +212,21 @@ module.exports = {
 										minTTL = req.options.ttl;
 									};
 								} else {
-									if (req.options.callback) {
+									const callback = req.options.callback;
+									const cancellablePromise = types.isCancellablePromise(req.msg.promise);
+									if (callback || cancellablePromise) {
 										try {
 											(function(req) {
 												_shared.Natives.processNextTick(doodad.Callback(this, function() {
-													req.options.callback(new types.TimeoutError("TTL expired."), null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
+													let reason = new types.TimeoutError("TTL expired.");
+													if (cancellablePromise) {
+														try {
+															req.msg.promise.cancel(reason);
+														} catch(o) {
+															reason = o;
+														};
+													};
+													callback && callback(reason, null, (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : process));
 												}));
 											})(req);
 										} catch (ex) {
@@ -340,41 +350,41 @@ module.exports = {
 					sendAsync: doodad.PUBLIC(doodad.ASYNC(function sendAsync(msg, /*optional*/options) {
 						const Promise = types.getPromise();
 						return Promise.create(function sendAsyncPromise(resolve, reject) {
-							const type = types.get(msg, 'type');
-							if (type === nodejsCluster.ClusterMessageTypes.Notify) {
-								this.send(msg, options);
-								resolve();
-							} else {
-								const timeout = types.get(options, 'timeout');
-								const worker = types.get(options, 'worker');
-								const result = {};
-								let ids = null;
-								let asyncId = null;
-								let count = 1;
-								if (!types.isNothing(timeout)) {
-									asyncId = tools.callAsync(function() {
-										this.cancel(ids);
-										reject(new types.TimeoutError());
-									}, timeout, this, null, true);
-								};
-								if (types.isNothing(worker)) {
-									count = types.keys(nodeCluster.workers).length;
-								} else if (types.isArray(worker)) {
-									count = worker.length;
-								};
-								const callback = function(err, res, worker) {
-									if (asyncId) {
-										asyncId.cancel();
+								const type = types.get(msg, 'type');
+								if (type === nodejsCluster.ClusterMessageTypes.Notify) {
+									this.send(msg, options);
+									resolve();
+								} else {
+									const timeout = types.get(options, 'timeout');
+									const worker = types.get(options, 'worker');
+									const result = {};
+									let ids = null;
+									let asyncId = null;
+									let count = 1;
+									if (!types.isNothing(timeout)) {
+										asyncId = tools.callAsync(function() {
+											this.cancel(ids);
+											reject(new types.TimeoutError());
+										}, timeout, this, null, true);
 									};
-									result[worker.id] = err || res;
-									count--;
-									if (count <= 0) {
-										resolve(result);
+									if (types.isNothing(worker)) {
+										count = types.keys(nodeCluster.workers).length;
+									} else if (types.isArray(worker)) {
+										count = worker.length;
 									};
+									const callback = function(err, res, worker) {
+										if (asyncId) {
+											asyncId.cancel();
+										};
+										result[worker.id] = err || res;
+										count--;
+										if (count <= 0) {
+											resolve(result);
+										};
+									};
+									ids = this.send(msg, types.extend({}, options, {callback: callback}));
 								};
-								ids = this.send(msg, types.extend({}, options, {callback: callback}));
-							};
-						}, this);
+							}, this);
 					})),
 
 					callMethod: doodad.OVERRIDE(function callMethod(method, /*optional*/args, /*optional*/options) {
@@ -415,7 +425,7 @@ module.exports = {
 									if (method) {
 										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
 											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this /*, session*/);
-										service.execute(rpcRequest, method, params)
+										msg.promise = service.execute(rpcRequest, method, params)
 											.nodeify(function endRequestPromise(err, result) {
 												return rpcRequest.end(err || result)
 													.nodeify(function(err2, dummy) {
