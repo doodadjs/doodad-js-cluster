@@ -220,7 +220,7 @@ module.exports = {
 												}));
 											})(req);
 										} catch (ex) {
-											if (ex instanceof types.ScriptInterruptedError) {
+											if (ex.bubble) {
 												throw ex;
 											};
 										};
@@ -249,7 +249,9 @@ module.exports = {
 								ids = [ids];
 							};
 							for (let i = 0; i < ids.length; i++) {
-								delete this.__pending[ids[i]];
+								if (types.has(ids, i)) {
+									delete this.__pending[ids[i]];
+								};
 							};
 						};
 					}),
