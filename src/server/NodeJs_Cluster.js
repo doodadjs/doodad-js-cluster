@@ -381,6 +381,9 @@ module.exports = {
 									};
 								} else {
 									if (retryDelay > 0) {
+										if ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Ping)) {
+											delete req.msg.id;
+										};
 										tools.callAsync(this.send, retryDelay, this, [
 											req.msg,
 											types.extend({}, req.options, {worker: req.worker})
