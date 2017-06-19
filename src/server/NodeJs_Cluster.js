@@ -210,7 +210,7 @@ module.exports = {
 								} else {
 									const callback = req.options.callback;
 									const promise = req.promise;
-									if (callback || promise) {
+									if (callback || (promise && types.isFunction(promise.cancel))) {
 										try {
 											let reason = new types.TimeoutError("TTL expired.");
 											tools.callAsync(function() {
@@ -272,7 +272,7 @@ module.exports = {
 										delete this.__pending[id];
 										const callback = req.options.callback;
 										const promise = req.promise;
-										if (callback || promise) {
+										if (callback || (promise && types.isFunction(promise.cancel))) {
 											reason = (types.isNothing(reason) ? new types.CanceledError() : reason);
 											try {
 												tools.callAsync(function() {
