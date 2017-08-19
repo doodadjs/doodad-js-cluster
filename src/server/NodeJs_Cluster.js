@@ -51,12 +51,12 @@ module.exports = {
 					nodejs = doodad.NodeJs,
 					//nodejsIO = nodejs.IO,
 					//nodejsServer = nodejs.Server,
-					nodejsCluster = nodejs.Cluster,
+					cluster = nodejs.Cluster,
 					
 					nodeCluster = require('cluster');
 
 				
-				nodejsCluster.ADD('ClusterMessageTypes', types.freezeObject(types.nullObject({
+				cluster.ADD('ClusterMessageTypes', types.freezeObject(types.nullObject({
 					Request: 0,
 					Response: 1,
 					Notify: 2,
@@ -65,7 +65,7 @@ module.exports = {
 					Pong: 5,
 				})));
 				
-				nodejsCluster.REGISTER(ipc.Request.$extend(
+				cluster.REGISTER(ipc.Request.$extend(
 				{
 					$TYPE_NAME: 'ClusterMessengerRequest',
 					$TYPE_UUID: '' /*! INJECT('+' + TO_SOURCE(UUID('ClusterMessengerRequest')), true) */,
@@ -85,7 +85,7 @@ module.exports = {
 					end: doodad.OVERRIDE(function end(/*optional*/result) {
 						if (!this.__ended) {
 							this.__ended = true;
-							if (this.msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+							if (this.msg.type === cluster.ClusterMessageTypes.Request) {
 								try {
 									result = doodad.PackedValue.$pack(result);
 								} catch(ex) {
@@ -93,7 +93,7 @@ module.exports = {
 								};
 								this.server.send({
 									id: this.msg.id,
-									type: nodejsCluster.ClusterMessageTypes.Response,
+									type: cluster.ClusterMessageTypes.Response,
 									result: result,
 								}, {noResponse: true, worker: this.msg.worker});
 							};
@@ -120,11 +120,11 @@ module.exports = {
 				}));
 				
 
-				nodejsCluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function(/*optional*/message, /*optional*/params) {
+				cluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function(/*optional*/message, /*optional*/params) {
 					this.superArgs = [message || "Message queue limit reached.", params];
 				}));
 				
-				nodejsCluster.REGISTER(doodad.Object.$extend(
+				cluster.REGISTER(doodad.Object.$extend(
 									ipcInterfaces.IServer,
 									ipcMixIns.IClient,
 									ioInterfaces.IConsole,
@@ -197,7 +197,7 @@ module.exports = {
 								delete this.__pending[id];
 								const type = types.get(req.msg, 'type');
 								if (req.options.retryDelay > 0) {
-									if ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Ping)) {
+									if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
 										delete req.msg.id;
 									};
 									tools.callAsync(this.send, req.options.retryDelay, this, [
@@ -315,11 +315,11 @@ module.exports = {
 							retryDelay = types.getDefault(options, 'retryDelay', 0),
 							type = types.get(msg, 'type'),
 							id = types.get(msg, 'id');
-						if ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Ping)) {
+						if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
 							if (id) {
 								throw new types.Error("Invalid message ID.");
 							};
-						} else if ((type === nodejsCluster.ClusterMessageTypes.Response) || (type === nodejsCluster.ClusterMessageTypes.Pong)) {
+						} else if ((type === cluster.ClusterMessageTypes.Response) || (type === cluster.ClusterMessageTypes.Pong)) {
 							if (!id || !(id in this.__pending)) {
 								return [];
 							};
@@ -381,7 +381,7 @@ module.exports = {
 									};
 								} else {
 									if (retryDelay > 0) {
-										if ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Ping)) {
+										if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
 											delete req.msg.id;
 										};
 										tools.callAsync(this.send, retryDelay, this, [
@@ -393,11 +393,11 @@ module.exports = {
 											const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
 											if (worker) {
 												tools.callAsync(function() {
-													callback(new nodejsCluster.QueueLimitReached(), null, worker);
+													callback(new cluster.QueueLimitReached(), null, worker);
 												}, -1, this);
 											};
 										} else {
-											throw new nodejsCluster.QueueLimitReached();
+											throw new cluster.QueueLimitReached();
 										};
 									};
 								};
@@ -412,7 +412,7 @@ module.exports = {
 						const Promise = types.getPromise();
 						return Promise.create(function sendAsyncPromise(resolve, reject) {
 								const type = types.get(msg, 'type');
-								if (type === nodejsCluster.ClusterMessageTypes.Notify) {
+								if (type === cluster.ClusterMessageTypes.Notify) {
 									this.send(msg, options);
 									resolve();
 								} else {
@@ -452,7 +452,7 @@ module.exports = {
 					callMethod: doodad.OVERRIDE(function callMethod(method, /*optional*/args, /*optional*/options) {
 						const noResponse = types.get(options, 'noResponse');
 						return this.sendAsync({
-							type: (noResponse ? nodejsCluster.ClusterMessageTypes.Notify : nodejsCluster.ClusterMessageTypes.Request),
+							type: (noResponse ? cluster.ClusterMessageTypes.Notify : cluster.ClusterMessageTypes.Request),
 							method: method,
 							params: doodad.PackedValue.$pack(args),
 						}, options);
@@ -461,7 +461,7 @@ module.exports = {
 					ping: doodad.PUBLIC(function ping(/*optional*/options) {
 						if (nodeCluster.isMaster) {
 							return this.sendAsync({
-								type: nodejsCluster.ClusterMessageTypes.Ping,
+								type: cluster.ClusterMessageTypes.Ping,
 							}, options);
 						};
 					}),
@@ -481,12 +481,12 @@ module.exports = {
 							const service = this.service;
 							const id = types.get(msg, 'id');
 							const type = types.get(msg, 'type');
-							if (service && ((type === nodejsCluster.ClusterMessageTypes.Request) || (type === nodejsCluster.ClusterMessageTypes.Notify))) {
+							if (service && ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Notify))) {
 								if (id && !types.has(this.__pending, id)) {
 									const method = types.get(msg, 'method');
 									if (method) {
 										const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
-											rpcRequest = new nodejsCluster.ClusterMessengerRequest(msg, this /*, session*/);
+											rpcRequest = new cluster.ClusterMessengerRequest(msg, this /*, session*/);
 										const promise = service.execute(rpcRequest, method, params)
 											.nodeify(function endRequestPromise(err, result) {
 												return rpcRequest.end(err || result)
@@ -504,7 +504,7 @@ module.exports = {
 												};
 											})
 											.catch(tools.catchAndExit);
-										if (msg.type === nodejsCluster.ClusterMessageTypes.Request) {
+										if (msg.type === cluster.ClusterMessageTypes.Request) {
 											this.__pending[id] = {
 												msg: msg,
 												options: {
@@ -518,12 +518,12 @@ module.exports = {
 									} else {
 										this.send({
 											id: id,
-											type: nodejsCluster.ClusterMessageTypes.Response,
+											type: cluster.ClusterMessageTypes.Response,
 											result: doodad.PackedValue.$pack(new ipc.InvalidRequest()),
 										}, {noResponse: true});
 									};
 								};
-							} else if (type === nodejsCluster.ClusterMessageTypes.Response) {
+							} else if (type === cluster.ClusterMessageTypes.Response) {
 								if (id && types.has(this.__pending, id)) {
 									const req = this.__pending[id];
 									delete this.__pending[id];
@@ -536,7 +536,7 @@ module.exports = {
 										};
 									};
 								};
-							} else if (type === nodejsCluster.ClusterMessageTypes.Ping) {
+							} else if (type === cluster.ClusterMessageTypes.Ping) {
 								if (nodeCluster.isWorker) {
 									this.__pending[id] = {
 										msg: msg,
@@ -547,10 +547,10 @@ module.exports = {
 									};;
 									this.send({
 										id: id,
-										type: nodejsCluster.ClusterMessageTypes.Pong,
+										type: cluster.ClusterMessageTypes.Pong,
 									}, {noResponse: true});
 								};
-							} else if (type === nodejsCluster.ClusterMessageTypes.Pong) {
+							} else if (type === cluster.ClusterMessageTypes.Pong) {
 								if (nodeCluster.isMaster && id && types.has(this.__pending, id)) {
 									const req = this.__pending[id];
 									delete this.__pending[id];
@@ -563,7 +563,7 @@ module.exports = {
 										};
 									};
 								};
-							} else if (type === nodejsCluster.ClusterMessageTypes.Console) {
+							} else if (type === cluster.ClusterMessageTypes.Console) {
 								const message = types.get(msg, 'message');
 								if (nodeCluster.isMaster && message) {
 									const messageType = types.get(msg, 'messageType', 'log');
