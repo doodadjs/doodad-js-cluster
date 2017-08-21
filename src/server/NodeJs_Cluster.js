@@ -476,6 +476,13 @@ module.exports = {
 							handle = msg;
 							msg = worker;
 							worker = undefined;
+//console.log(types.toSource(msg, 15));
+						} else {
+//console.log(types.toSource(msg, 15));
+							msg.worker = worker;
+						};
+						if (nodeCluster.isMaster && !worker) {
+							throw new types.NotSupported("That Node.js version is not supported. Please upgrade to >= 6.x.");
 						};
 						if (types.isObject(msg)) {
 							const service = this.service;
@@ -582,7 +589,7 @@ module.exports = {
 					log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
 						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
-								type: nodejsCluster.ClusterMessageTypes.Console,
+								type: cluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'log',
 							}, {noResponse: true});
@@ -591,7 +598,7 @@ module.exports = {
 					info: doodad.OVERRIDE(ioInterfaces.IConsole, function info(raw, /*optional*/options) {
 						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
-								type: nodejsCluster.ClusterMessageTypes.Console,
+								type: cluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'info',
 							}, {noResponse: true});
@@ -600,7 +607,7 @@ module.exports = {
 					warn: doodad.OVERRIDE(ioInterfaces.IConsole, function warn(raw, /*optional*/options) {
 						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
-								type: nodejsCluster.ClusterMessageTypes.Console,
+								type: cluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'warn',
 							}, {noResponse: true});
@@ -609,7 +616,7 @@ module.exports = {
 					error: doodad.OVERRIDE(ioInterfaces.IConsole, function error(raw, /*optional*/options) {
 						if (raw && nodeCluster.isWorker) {
 							this[doodad.HostSymbol].send({
-								type: nodejsCluster.ClusterMessageTypes.Console,
+								type: cluster.ClusterMessageTypes.Console,
 								message: raw,
 								messageType: 'error',
 							}, {noResponse: true});
