@@ -418,15 +418,18 @@ module.exports = {
 								} else {
 									const timeout = types.get(options, 'timeout');
 									const worker = types.get(options, 'worker');
+									const rejectOnError = types.get(options, 'rejectOnError', true);
 									const result = {};
 									let ids = null;
 									let asyncId = null;
 									let count = 1;
+									let resolved = false;
 									if (!types.isNothing(timeout)) {
 										asyncId = tools.callAsync(function() {
 											const reason = new types.TimeoutError();
 											this.cancel(ids, reason);
 											reject(reason);
+											resolved = true;
 										}, timeout, this, null, true);
 									};
 									if (types.isNothing(worker)) {
@@ -437,11 +440,20 @@ module.exports = {
 									const callback = function(err, res, worker) {
 										if (asyncId) {
 											asyncId.cancel();
+											asyncId = null;
 										};
-										result[worker.id] = err || res;
-										count--;
-										if (count <= 0) {
-											resolve(result);
+										if (!resolved) {
+											if (rejectOnError && (err || types.isError(res))) {
+												reject(err || res);
+												resolved = true;
+											} else {
+												result[worker.id] = err || res;
+												count--;
+												if (count <= 0) {
+													resolve(result);
+													resolved = true;
+												};
+											};
 										};
 									};
 									ids = this.send(msg, types.extend({}, options, {callback: callback}));
