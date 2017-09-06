@@ -56,7 +56,7 @@ module.exports = {
 					nodeCluster = require('cluster');
 
 				
-				cluster.ADD('ClusterMessageTypes', types.freezeObject(types.nullObject({
+				cluster.ADD('ClusterMessageTypes', types.freezeObject(tools.nullObject({
 					Request: 0,
 					Response: 1,
 					Notify: 2,
@@ -158,7 +158,7 @@ module.exports = {
 
 						_shared.setAttribute(this, 'service', service);
 						
-						this.__pending = types.nullObject();
+						this.__pending = tools.nullObject();
 					}),
 					
 					connect: doodad.OVERRIDE(function connect(/*optional*/options) {
@@ -202,7 +202,7 @@ module.exports = {
 									};
 									tools.callAsync(this.send, req.options.retryDelay, this, [
 										req.msg,
-										types.extend({}, req.options, {worker: req.worker})
+										tools.extend({}, req.options, {worker: req.worker})
 									]);
 									if (req.options.ttl < minTTL) {
 										minTTL = req.options.ttl;
@@ -307,7 +307,7 @@ module.exports = {
 					}),
 
 					send: doodad.PUBLIC(function send(msg, /*optional*/options) {
-						options = types.nullObject(options);
+						options = tools.nullObject(options);
 						const callback = types.getDefault(options, 'callback', null),
 							worker = types.getDefault(options, 'worker', null),
 							noResponse = types.getDefault(options, 'noResponse', false),
@@ -348,13 +348,13 @@ module.exports = {
 							if (emitter && worker) {
 								let reqMsg = msg;
 								if (emitters.length > 1) {
-									reqMsg = types.extend({}, msg);
+									reqMsg = tools.extend({}, msg);
 								};
 								let reqId = id;
 								if (!reqId) {
 									reqMsg.id = reqId = this.createId();
 								};
-								const req = types.nullObject({
+								const req = tools.nullObject({
 									msg: reqMsg,
 									worker: worker.id,
 									options: options,
@@ -386,7 +386,7 @@ module.exports = {
 										};
 										tools.callAsync(this.send, retryDelay, this, [
 											req.msg,
-											types.extend({}, req.options, {worker: req.worker})
+											tools.extend({}, req.options, {worker: req.worker})
 										]);
 									} else {
 										if (callback) {
@@ -456,7 +456,7 @@ module.exports = {
 											};
 										};
 									};
-									ids = this.send(msg, types.extend({}, options, {callback: callback}));
+									ids = this.send(msg, tools.extend({}, options, {callback: callback}));
 								};
 							}, this);
 					})),
@@ -488,9 +488,9 @@ module.exports = {
 							handle = msg;
 							msg = worker;
 							worker = undefined;
-//console.log(types.toSource(msg, 15));
+//console.log(tools.toSource(msg, 15));
 						} else {
-//console.log(types.toSource(msg, 15));
+//console.log(tools.toSource(msg, 15));
 							msg.worker = worker;
 						};
 						if (nodeCluster.isMaster && !worker) {
