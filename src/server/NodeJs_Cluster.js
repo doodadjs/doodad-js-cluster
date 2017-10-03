@@ -24,11 +24,17 @@
 //	limitations under the License.
 //! END_REPLACE()
 
-//! IF_SET("esm")
-	//! INJECT("import * as nodeCluster from 'cluster';");
+//! IF_SET("mjs")
+	//! INJECT("import {default as nodeCluster} from 'cluster';");
 //! ELSE()
 	const nodeCluster = require('cluster');
 //! END_IF()
+
+
+const nodeClusterIsMaster = nodeCluster.isMaster,
+	nodeClusterIsWorker = nodeCluster.isWorker,
+	nodeClusterWorker = nodeCluster.worker,
+	nodeClusterWorkers = nodeCluster.workers;
 
 
 exports.add = function add(DD_MODULES) {
@@ -166,7 +172,7 @@ exports.add = function add(DD_MODULES) {
 				}),
 					
 				connect: doodad.OVERRIDE(function connect(/*optional*/options) {
-					if (nodeCluster.isMaster) {
+					if (nodeClusterIsMaster) {
 						this.onNodeMessage.attach(nodeCluster);
 					} else {
 						this.onNodeMessage.attach(process);
@@ -230,7 +236,7 @@ exports.add = function add(DD_MODULES) {
 												};
 											};
 											if (callback) {
-												const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
+												const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
 												if (worker) {
 													callback(reason, null, worker);
 												};
@@ -292,7 +298,7 @@ exports.add = function add(DD_MODULES) {
 													};
 												};
 												if (callback) {
-													const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
+													const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
 													if (worker) {
 														callback(reason, null, worker);
 													};
@@ -331,11 +337,11 @@ exports.add = function add(DD_MODULES) {
 					};
 					let emitters,
 						workers;
-					if (nodeCluster.isMaster) {
+					if (nodeClusterIsMaster) {
 						if (!id && types.isNothing(worker)) {
-							workers = emitters = types.values(nodeCluster.workers);
+							workers = emitters = types.values(nodeClusterWorkers);
 						} else if (types.isInteger(worker)) {
-							workers = emitters = [nodeCluster.workers[worker]];
+							workers = emitters = [nodeClusterWorkers[worker]];
 						} else if (!types.isArray(worker)) {
 							// TODO: "worker instanceof ???" if possible
 							root.DD_ASSERT && root.DD_ASSERT(types.isObject(worker), "Invalid worker.");
@@ -343,7 +349,7 @@ exports.add = function add(DD_MODULES) {
 						};
 					} else {
 						emitters = [process];
-						workers = [nodeCluster.worker];
+						workers = [nodeClusterWorker];
 					};
 					const ids = [];
 					for (let i = 0; i < emitters.length; i++) {
@@ -367,7 +373,7 @@ exports.add = function add(DD_MODULES) {
 								return doodad.Callback(this, function(result) {
 									req.proceedTime = process.hrtime();
 									if (noResponse && req.options.callback) {
-										const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
+										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
 										if (worker) {
 											req.options.callback(null, result, worker);
 										};
@@ -394,7 +400,7 @@ exports.add = function add(DD_MODULES) {
 									]);
 								} else {
 									if (callback) {
-										const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
+										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
 										if (worker) {
 											tools.callAsync(function() {
 												callback(new cluster.QueueLimitReached(), null, worker);
@@ -437,7 +443,7 @@ exports.add = function add(DD_MODULES) {
 									}, timeout, this, null, true);
 								};
 								if (types.isNothing(worker)) {
-									count = types.keys(nodeCluster.workers).length;
+									count = types.keys(nodeClusterWorkers).length;
 								} else if (types.isArray(worker)) {
 									count = worker.length;
 								};
@@ -475,7 +481,7 @@ exports.add = function add(DD_MODULES) {
 				}),
 					
 				ping: doodad.PUBLIC(function ping(/*optional*/options) {
-					if (nodeCluster.isMaster) {
+					if (nodeClusterIsMaster) {
 						return this.sendAsync({
 							type: cluster.ClusterMessageTypes.Ping,
 						}, options);
@@ -497,7 +503,7 @@ exports.add = function add(DD_MODULES) {
 //console.log(tools.toSource(msg, 15));
 						msg.worker = worker;
 					};
-					if (nodeCluster.isMaster && !worker) {
+					if (nodeClusterIsMaster && !worker) {
 						throw new types.NotSupported("That Node.js version is not supported. Please upgrade to >= 6.x.");
 					};
 					if (types.isObject(msg)) {
@@ -552,7 +558,7 @@ exports.add = function add(DD_MODULES) {
 								delete this.__pending[id];
 								const callback = types.get(req.options, 'callback');
 								if (callback) {
-									const worker = (nodeCluster.isMaster ? nodeCluster.workers[req.worker] : nodeCluster.worker);
+									const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
 									if (worker) {
 										const result = doodad.PackedValue.$unpack(msg.result);
 										callback(null, result, worker);
@@ -560,7 +566,7 @@ exports.add = function add(DD_MODULES) {
 								};
 							};
 						} else if (type === cluster.ClusterMessageTypes.Ping) {
-							if (nodeCluster.isWorker) {
+							if (nodeClusterIsWorker) {
 								this.__pending[id] = {
 									msg: msg,
 									options: {
@@ -574,12 +580,12 @@ exports.add = function add(DD_MODULES) {
 								}, {noResponse: true});
 							};
 						} else if (type === cluster.ClusterMessageTypes.Pong) {
-							if (nodeCluster.isMaster && id && types.has(this.__pending, id)) {
+							if (nodeClusterIsMaster && id && types.has(this.__pending, id)) {
 								const req = this.__pending[id];
 								delete this.__pending[id];
 								const callback = types.get(req.options, 'callback');
 								if (callback) {
-									const worker = nodeCluster.workers[req.worker];
+									const worker = nodeClusterWorkers[req.worker];
 									if (worker) {
 										const time = process.hrtime(req.proceedTime);
 										callback(null, (time[0] + (time[1] / 1e9)) * 1e3, worker);
@@ -588,7 +594,7 @@ exports.add = function add(DD_MODULES) {
 							};
 						} else if (type === cluster.ClusterMessageTypes.Console) {
 							const message = types.get(msg, 'message');
-							if (nodeCluster.isMaster && message) {
+							if (nodeClusterIsMaster && message) {
 								const messageType = types.get(msg, 'messageType', 'log');
 								if (['log', 'info', 'warn', 'error', 'exception'].indexOf(messageType) >= 0) {
 									const fn = global.console[messageType];
@@ -603,7 +609,7 @@ exports.add = function add(DD_MODULES) {
 					
 				// Console hook
 				log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
-					if (raw && nodeCluster.isWorker) {
+					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
 							type: cluster.ClusterMessageTypes.Console,
 							message: raw,
@@ -612,7 +618,7 @@ exports.add = function add(DD_MODULES) {
 					};
 				}),
 				info: doodad.OVERRIDE(ioInterfaces.IConsole, function info(raw, /*optional*/options) {
-					if (raw && nodeCluster.isWorker) {
+					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
 							type: cluster.ClusterMessageTypes.Console,
 							message: raw,
@@ -621,7 +627,7 @@ exports.add = function add(DD_MODULES) {
 					};
 				}),
 				warn: doodad.OVERRIDE(ioInterfaces.IConsole, function warn(raw, /*optional*/options) {
-					if (raw && nodeCluster.isWorker) {
+					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
 							type: cluster.ClusterMessageTypes.Console,
 							message: raw,
@@ -630,7 +636,7 @@ exports.add = function add(DD_MODULES) {
 					};
 				}),
 				error: doodad.OVERRIDE(ioInterfaces.IConsole, function error(raw, /*optional*/options) {
-					if (raw && nodeCluster.isWorker) {
+					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
 							type: cluster.ClusterMessageTypes.Console,
 							message: raw,
