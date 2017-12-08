@@ -130,9 +130,9 @@ exports.add = function add(DD_MODULES) {
 			}));
 				
 
-			cluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function(/*optional*/message, /*optional*/params) {
-				this.superArgs = [message || "Message queue limit reached.", params];
-			}));
+			cluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function _super(/*optional*/message, /*optional*/params) {
+				return [message || "Message queue limit reached.", params];
+			}, null, null, null, /*! REPLACE_BY(TO_SOURCE(UUID('QueueLimitReached')), true) */ null /*! END_REPLACE() */));
 				
 			cluster.REGISTER(doodad.Object.$extend(
 								ipcInterfaces.IServer,
