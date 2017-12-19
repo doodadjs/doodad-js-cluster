@@ -97,15 +97,45 @@ exports.add = function add(DD_MODULES) {
 						this.__ended = true;
 						if (this.msg.type === cluster.ClusterMessageTypes.Request) {
 							try {
-								result = doodad.PackedValue.$pack(result);
+								const resultFn = (types.isCancelable(result) ? 'start' : (types.isPromise(result) ? 'then' : null));
+								if (resultFn) {
+									return result[resultFn](
+										function _resolveCb(result) {
+											if (types.isError(result)) {
+												result = new types.TypeError("Resolved result returned to '~0~.prototype.end' must not be an error object.", [types.getTypeName(this)]);
+											};
+											return this.server.sendAsync({
+												id: this.msg.id,
+												type: cluster.ClusterMessageTypes.Response,
+												result: doodad.PackedValue.$pack(result),
+											}, {noResponse: true, worker: this.msg.worker});
+										}, 
+										function _rejectCb(err) {
+											if (!types.isError(err)) {
+												err = new types.TypeError("Rejected result returned '~0~.prototype.end' must be an error object.", [types.getTypeName(this)]);
+											};
+											return this.server.sendAsync({
+												id: this.msg.id,
+												type: cluster.ClusterMessageTypes.Response,
+												result: doodad.PackedValue.$pack(err),
+											}, {noResponse: true, worker: this.msg.worker});
+										},
+										this
+									);
+								} else {
+									return this.server.sendAsync({
+										id: this.msg.id,
+										type: cluster.ClusterMessageTypes.Response,
+										result: doodad.PackedValue.$pack(result),
+									}, {noResponse: true, worker: this.msg.worker});
+								};
 							} catch(ex) {
-								result = doodad.PackedValue.$pack(ex);
+								return this.server.sendAsync({
+									id: this.msg.id,
+									type: cluster.ClusterMessageTypes.Response,
+									result: doodad.PackedValue.$pack(ex),
+								}, {noResponse: true, worker: this.msg.worker});
 							};
-							this.server.send({
-								id: this.msg.id,
-								type: cluster.ClusterMessageTypes.Response,
-								result: result,
-							}, {noResponse: true, worker: this.msg.worker});
 						};
 					};
 						
@@ -219,14 +249,14 @@ exports.add = function add(DD_MODULES) {
 								};
 							} else {
 								const callback = req.options.callback;
-								const promise = req.promise;
-								if (callback || (promise && types.isFunction(promise.cancel))) {
+								const cancelable = req.cancelable;
+								if (callback || cancelable) {
 									try {
 										let reason = new types.TimeoutError("TTL expired.");
 										tools.callAsync(function() {
-											if (promise) {
+											if (cancelable) {
 												try {
-													promise.cancel(reason);
+													cancelable.cancel(reason);
 												} catch(o) {
 													if (callback) {
 														reason = o;
@@ -281,14 +311,16 @@ exports.add = function add(DD_MODULES) {
 									const req = this.__pending[id]
 									delete this.__pending[id];
 									const callback = req.options.callback;
-									const promise = req.promise;
-									if (callback || (promise && types.isFunction(promise.cancel))) {
-										reason = (types.isNothing(reason) ? new types.CanceledError() : reason);
+									const cancelable = req.cancelable;
+									if (callback || cancelable) {
+										if (types.isNothing(reason)) {
+											reason = new types.CanceledError();
+										};
 										try {
 											tools.callAsync(function() {
-												if (promise) {
+												if (cancelable) {
 													try {
-														promise.cancel(reason);
+														cancelable.cancel(reason);
 													} catch(o) {
 														if (callback) {
 															reason = o;
@@ -534,14 +566,18 @@ exports.add = function add(DD_MODULES) {
 										})
 										.catch(tools.catchAndExit);
 									if (msg.type === cluster.ClusterMessageTypes.Request) {
+										const isCancelable = types.isCancelable(promise);
+//console.log(isCancelable);
 										this.__pending[id] = {
 											msg: msg,
 											options: {
 												ttl: msg.ttl || this.defaultTTL, // TODO: Limit TTL
 											},
 											time: process.hrtime(),
-											promise: promise,
+											promise: (isCancelable ? promise.start() : promise), // NOTE: 'wait' will start the task
+											cancelable: (isCancelable ? promise : null),
 										};
+
 										this.purgePending();
 									};
 								} else {
