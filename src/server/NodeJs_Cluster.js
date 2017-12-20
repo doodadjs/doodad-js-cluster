@@ -74,7 +74,7 @@ exports.add = function add(DD_MODULES) {
 				Ping: 4,
 				Pong: 5,
 			})));
-				
+
 			cluster.REGISTER(ipc.Request.$extend(
 			{
 				$TYPE_NAME: 'ClusterMessengerRequest',
@@ -83,6 +83,7 @@ exports.add = function add(DD_MODULES) {
 				msg: doodad.PUBLIC(doodad.READ_ONLY(  null  )),
 					
 				__ended: doodad.PROTECTED(false),
+				__cancelable: doodad.PROTECTED(null),
 					
 				create: doodad.OVERRIDE(function(msg, server, /*optional*/session) {
 					if (root.DD_ASSERT) {
@@ -93,53 +94,41 @@ exports.add = function add(DD_MODULES) {
 				}),
 					
 				end: doodad.OVERRIDE(function end(/*optional*/result) {
-					if (!this.__ended) {
-						this.__ended = true;
-						if (this.msg.type === cluster.ClusterMessageTypes.Request) {
-							try {
-								const resultFn = (types.isCancelable(result) ? 'start' : (types.isPromise(result) ? 'then' : null));
-								if (resultFn) {
-									return result[resultFn](
-										function _resolveCb(result) {
-											if (types.isError(result)) {
-												result = new types.TypeError("Resolved result returned to '~0~.prototype.end' must not be an error object.", [types.getTypeName(this)]);
-											};
-											return this.server.sendAsync({
-												id: this.msg.id,
-												type: cluster.ClusterMessageTypes.Response,
-												result: doodad.PackedValue.$pack(result),
-											}, {noResponse: true, worker: this.msg.worker});
-										}, 
-										function _rejectCb(err) {
-											if (!types.isError(err)) {
-												err = new types.TypeError("Rejected result returned '~0~.prototype.end' must be an error object.", [types.getTypeName(this)]);
-											};
-											return this.server.sendAsync({
-												id: this.msg.id,
-												type: cluster.ClusterMessageTypes.Response,
-												result: doodad.PackedValue.$pack(err),
-											}, {noResponse: true, worker: this.msg.worker});
-										},
-										this
-									);
-								} else {
-									return this.server.sendAsync({
-										id: this.msg.id,
-										type: cluster.ClusterMessageTypes.Response,
-										result: doodad.PackedValue.$pack(result),
-									}, {noResponse: true, worker: this.msg.worker});
-								};
-							} catch(ex) {
-								return this.server.sendAsync({
-									id: this.msg.id,
-									type: cluster.ClusterMessageTypes.Response,
-									result: doodad.PackedValue.$pack(ex),
-								}, {noResponse: true, worker: this.msg.worker});
+					const Promise = types.getPromise();
+					return Promise.try(function tryEnd() {
+						if (!this.__ended) {
+							this.__ended = true;
+							if (this.msg.type === cluster.ClusterMessageTypes.Request) {
+								return Promise.resolve(result)
+									.then(function(result) {
+										if (types.isCancelable(result)) {
+											this.__cancelable = result;
+											return result.start();
+										} else {
+											return result;
+										};
+									}, null, this)
+									.then(function(result) {
+										return this.server.sendAsync({
+											id: this.msg.id,
+											type: cluster.ClusterMessageTypes.Response,
+											result: doodad.PackedValue.$pack(result),
+										}, {noResponse: true, worker: this.msg.worker});
+									}, null, this);
 							};
 						};
-					};
-						
-					throw new server.EndOfRequest();
+					}, this)						
+					.catch(function(err) {
+						return this.server.sendAsync({
+							id: this.msg.id,
+							type: cluster.ClusterMessageTypes.Response,
+							result: doodad.PackedValue.$pack(err),
+						}, {noResponse: true, worker: this.msg.worker});
+					}, this)
+					.then(function thenThrow(dummy) {
+						// NOTE: 'end' must always throws 'EndOfRequest' when not rejected.
+						throw new server.EndOfRequest();
+					});
 				}),
 
 				respondWithError: doodad.OVERRIDE(function respondWithError(ex) {
@@ -249,7 +238,7 @@ exports.add = function add(DD_MODULES) {
 								};
 							} else {
 								const callback = req.options.callback;
-								const cancelable = req.cancelable;
+								const cancelable = req.__cancelable;
 								if (callback || cancelable) {
 									try {
 										let reason = new types.TimeoutError("TTL expired.");
@@ -311,7 +300,7 @@ exports.add = function add(DD_MODULES) {
 									const req = this.__pending[id]
 									delete this.__pending[id];
 									const callback = req.options.callback;
-									const cancelable = req.cancelable;
+									const cancelable = req.__cancelable;
 									if (callback || cancelable) {
 										if (types.isNothing(reason)) {
 											reason = new types.CanceledError();
@@ -452,55 +441,50 @@ exports.add = function add(DD_MODULES) {
 					
 				sendAsync: doodad.PUBLIC(doodad.ASYNC(function sendAsync(msg, /*optional*/options) {
 					const Promise = types.getPromise();
-					return Promise.create(function sendAsyncPromise(resolve, reject) {
-							const type = types.get(msg, 'type');
-							if (type === cluster.ClusterMessageTypes.Notify) {
-								this.send(msg, options);
-								resolve();
-							} else {
-								const timeout = types.get(options, 'timeout');
-								const worker = types.get(options, 'worker');
-								const rejectOnError = types.get(options, 'rejectOnError', true);
-								const result = {};
-								let ids = null;
-								let asyncId = null;
-								let count = 1;
-								let resolved = false;
-								if (!types.isNothing(timeout)) {
-									asyncId = tools.callAsync(function() {
-										const reason = new types.TimeoutError();
-										this.cancel(ids, reason);
-										reject(reason);
-										resolved = true;
-									}, timeout, this, null, true);
-								};
-								if (types.isNothing(worker)) {
-									count = types.keys(nodeClusterWorkers).length;
-								} else if (types.isArray(worker)) {
-									count = worker.length;
-								};
-								const callback = function(err, res, worker) {
-									if (asyncId) {
-										asyncId.cancel();
-										asyncId = null;
-									};
-									if (!resolved) {
-										if (rejectOnError && (err || types.isError(res))) {
-											reject(err || res);
-											resolved = true;
-										} else {
-											result[worker.id] = err || res;
-											count--;
-											if (count <= 0) {
-												resolve(result);
-												resolved = true;
-											};
-										};
-									};
-								};
-								ids = this.send(msg, tools.extend({}, options, {callback: callback}));
+					const type = types.get(msg, 'type');
+					const worker = types.get(options, 'worker');
+					if (type === cluster.ClusterMessageTypes.Notify) {
+						this.send(msg, options);
+					} else {
+						return Promise.create(function sendAsyncPromise(resolve, reject) {
+							const timeout = types.get(options, 'timeout');
+							const rejectOnError = types.get(options, 'rejectOnError', true);
+							const state = {
+								result: {},
+								hasError: false,
+								ids: null,
+								timeoutId: null,
 							};
+							if (!types.isNothing(timeout)) {
+								state.timeoutId = tools.callAsync(function() {
+									const reason = new types.TimeoutError();
+									this.cancel(state.ids, reason);
+									reject(reason);
+								}, timeout, this, null, true);
+							};
+							state.ids = this.send(msg, tools.extend({}, options, {callback: function sendCallback(err, res, worker) {
+								if (state.timeoutId) {
+									state.timeoutId.cancel();
+									state.timeoutId = null;
+								};
+								state.count--;
+								state.result[worker.id] = err || res;
+								if (err || types.isError(res)) {
+									state.hasError = true;
+								};
+								if (state.count <= 0) {
+									state.count = Infinity; // Prevents the following to be executed twice
+									if (rejectOnError && state.hasError) {
+										// TODO: Should we box into an "SomethingError" object (where "Something" is replaced by a more appropriated word) ?
+										reject(state.result);
+									} else {
+										resolve(state.result);
+									};
+								};
+							}}));
+							state.count = state.ids.length;
 						}, this);
+					};
 				})),
 
 				callMethod: doodad.OVERRIDE(function callMethod(method, /*optional*/args, /*optional*/options) {
@@ -548,6 +532,7 @@ exports.add = function add(DD_MODULES) {
 								if (method) {
 									const params = doodad.PackedValue.$unpack(types.get(msg, 'params')),
 										rpcRequest = new cluster.ClusterMessengerRequest(msg, this /*, session*/);
+
 									const promise = service.execute(rpcRequest, method, params)
 										.nodeify(function endRequestPromise(err, result) {
 											return rpcRequest.end(err || result)
@@ -565,21 +550,20 @@ exports.add = function add(DD_MODULES) {
 											};
 										})
 										.catch(tools.catchAndExit);
+
 									if (msg.type === cluster.ClusterMessageTypes.Request) {
-										const isCancelable = types.isCancelable(promise);
-//console.log(isCancelable);
 										this.__pending[id] = {
 											msg: msg,
 											options: {
 												ttl: msg.ttl || this.defaultTTL, // TODO: Limit TTL
 											},
 											time: process.hrtime(),
-											promise: (isCancelable ? promise.start() : promise), // NOTE: 'wait' will start the task
-											cancelable: (isCancelable ? promise : null),
+											promise: promise,
 										};
 
 										this.purgePending();
 									};
+
 								} else {
 									this.send({
 										id: id,
@@ -653,6 +637,7 @@ exports.add = function add(DD_MODULES) {
 						}, {noResponse: true});
 					};
 				}),
+
 				info: doodad.OVERRIDE(ioInterfaces.IConsole, function info(raw, /*optional*/options) {
 					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
@@ -662,6 +647,7 @@ exports.add = function add(DD_MODULES) {
 						}, {noResponse: true});
 					};
 				}),
+
 				warn: doodad.OVERRIDE(ioInterfaces.IConsole, function warn(raw, /*optional*/options) {
 					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
@@ -671,6 +657,7 @@ exports.add = function add(DD_MODULES) {
 						}, {noResponse: true});
 					};
 				}),
+
 				error: doodad.OVERRIDE(ioInterfaces.IConsole, function error(raw, /*optional*/options) {
 					if (raw && nodeClusterIsWorker) {
 						this[doodad.HostSymbol].send({
