@@ -205,8 +205,9 @@ exports.add = function add(DD_MODULES) {
 					return id;
 				}),
 
-				createPacket: doodad.PROTECTED(function createPacket(msg, options) {
+				createPacket: doodad.PROTECTED(function createPacket(innerMsg, msg, options) {
 					return {
+						innerMsg: !!innerMsg,
 						msg: tools.nullObject(msg),
 						options: tools.nullObject(options),
 						worker: null, // worker ID
@@ -219,6 +220,7 @@ exports.add = function add(DD_MODULES) {
 				purgePending: doodad.PROTECTED(function purgePending() {
 					const Promise = types.getPromise();
 					const ids = types.keys(this.__pending);
+					const toCancelIds = [];
 					let minTTL = this.__purgeMinTTL || this.defaultTTL;
 					for (let i = 0; i < ids.length; i++) {
 						const id = ids[i],
@@ -226,14 +228,13 @@ exports.add = function add(DD_MODULES) {
 							time = process.hrtime(packet.time),
 							diff = (time[0] + (time[1] / 1e9)) * 1e3;
 						if (diff >= (packet.msg.ttl || this.defaultTTL)) {
-							delete this.__pending[id];
-							const type = packet.msg.type;
-							const retryDelay = packet.options.retryDelay;
-							if (retryDelay > 0) {
+							if (!packet.innerMsg && (packet.options.retryDelay > 0)) {
+								delete this.__pending[id];
+								const type = packet.msg.type;
 								if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
 									delete packet.msg.id;
 								};
-								tools.callAsync(this.send, retryDelay, this, [
+								tools.callAsync(this.send, packet.options.retryDelay, this, [
 									packet.msg,
 									tools.extend({}, packet.options, {worker: packet.worker})
 								]);
@@ -241,28 +242,14 @@ exports.add = function add(DD_MODULES) {
 									minTTL = packet.msg.ttl;
 								};
 							} else {
-								const callback = types.get(packet.options, 'callback', null);;
-								const cancelable = packet.request && packet.request.isCancelable();
-								if (callback || cancelable) {
-									const reason = new types.TimeoutError("TTL expired.");
-									const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
-									tools.callAsync(function() {
-										if (cancelable) {
-											packet.request.cancel(reason)
-												.nodeify(function(err, dummy) {
-													if (callback) {
-														callback(err || reason, null, worker);
-													};
-												})
-										} else if (callback) {
-											callback(reason, null, worker);
-										};
-									}, -1, this);
-								};
+								toCancelIds.push(id);
 							};
 						} else if (packet.msg.ttl - diff < minTTL) {
 							minTTL = packet.msg.ttl - diff;
 						};
+					};
+					if (toCancelIds.length > 0) {
+						this.cancel(toCancelIds, new types.TimeoutError("TTL expired."));
 					};
 					if (minTTL !== this.__purgeMinTTL) {
 						this.__purgeMinTTL = minTTL;
@@ -358,7 +345,7 @@ exports.add = function add(DD_MODULES) {
 						const emitter = emitters[i],
 							worker = workers[i];
 						if (emitter && worker) {
-							const packet = this.createPacket(msg, options);
+							const packet = this.createPacket(false, msg, options);
 							if (!packet.msg.id) {
 								packet.msg.id = this.createId();
 							};
@@ -527,7 +514,7 @@ exports.add = function add(DD_MODULES) {
 									if (msg.type === cluster.ClusterMessageTypes.Request) {
 										types.getDefault(msg, 'ttl', this.defaultTTL);
 
-										const packet = this.createPacket(msg, null);
+										const packet = this.createPacket(true, msg, null);
 
 										packet.request = rpcRequest;
 										packet.time = process.hrtime();
@@ -562,7 +549,7 @@ exports.add = function add(DD_MODULES) {
 						} else if (type === cluster.ClusterMessageTypes.Ping) {
 							if (nodeClusterIsWorker) {
 								types.getDefault(msg, 'ttl', this.defaultTTL);
-								const packet = this.createPacket(msg, null);
+								const packet = this.createPacket(true, msg, null);
 								packet.time = process.hrtime();
 								this.__pending[id] = packet;
 								this.send({
