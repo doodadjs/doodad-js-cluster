@@ -83,7 +83,6 @@ exports.add = function add(DD_MODULES) {
 				msg: doodad.PUBLIC(doodad.READ_ONLY(  null  )),
 					
 				__ended: doodad.PROTECTED(false),
-				__cancelable: doodad.PROTECTED(null),
 					
 				create: doodad.OVERRIDE(function(msg, server, /*optional*/session) {
 					if (root.DD_ASSERT) {
@@ -100,14 +99,6 @@ exports.add = function add(DD_MODULES) {
 							this.__ended = true;
 							if (this.msg.type === cluster.ClusterMessageTypes.Request) {
 								return Promise.resolve(result)
-									.then(function(result) {
-										if (types.isCancelable(result)) {
-											this.__cancelable = result;
-											return result.start();
-										} else {
-											return result;
-										};
-									}, null, this)
 									.then(function(result) {
 										return this.server.sendAsync({
 											id: this.msg.id,
@@ -167,29 +158,29 @@ exports.add = function add(DD_MODULES) {
 				__pending: doodad.PROTECTED(  null  ),
 				__purgeMinTTL: doodad.PROTECTED(  null  ),
 				__purgeTimeoutID: doodad.PROTECTED(  null  ),
-					
+
 				create: doodad.OVERRIDE(function(/*optional*/service) {
 					if (!types.isNothing(service)) {
 						if (types.isString(service)) {
 							service = namespaces.get(service);
 							root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Unknown service.");
 						};
-								
+
 						if (types.isType(service)) {
 							service = new service();
 							service = service.getInterface(ipcMixIns.Service);
 						};
-								
+
 						root.DD_ASSERT && root.DD_ASSERT(types._implements(service, ipcMixIns.Service), "Invalid service.");
 					};
 
 					this._super();
 
 					_shared.setAttribute(this, 'service', service);
-						
+
 					this.__pending = tools.nullObject();
 				}),
-					
+
 				connect: doodad.OVERRIDE(function connect(/*optional*/options) {
 					if (nodeClusterIsMaster) {
 						this.onNodeMessage.attach(nodeCluster);
@@ -197,7 +188,7 @@ exports.add = function add(DD_MODULES) {
 						this.onNodeMessage.attach(process);
 					};
 				}),
-						
+
 				createId: doodad.PROTECTED(function createId() {
 					let ok = false,
 						id;
@@ -213,63 +204,64 @@ exports.add = function add(DD_MODULES) {
 					};
 					return id;
 				}),
-					
+
+				createPacket: doodad.PROTECTED(function createPacket(msg, options) {
+					return {
+						msg: tools.nullObject(msg),
+						options: tools.nullObject(options),
+						worker: null, // worker ID
+						request: null,
+						time: null,
+						proceedTime: null,
+					};
+				}),
+
 				purgePending: doodad.PROTECTED(function purgePending() {
+					const Promise = types.getPromise();
 					const ids = types.keys(this.__pending);
 					let minTTL = this.__purgeMinTTL || this.defaultTTL;
 					for (let i = 0; i < ids.length; i++) {
 						const id = ids[i],
-							req = this.__pending[id],
-							time = process.hrtime(req.time),
+							packet = this.__pending[id],
+							time = process.hrtime(packet.time),
 							diff = (time[0] + (time[1] / 1e9)) * 1e3;
-						if (diff >= req.options.ttl) {
+						if (diff >= (packet.msg.ttl || this.defaultTTL)) {
 							delete this.__pending[id];
-							const type = types.get(req.msg, 'type');
-							if (req.options.retryDelay > 0) {
+							const type = packet.msg.type;
+							const retryDelay = packet.options.retryDelay;
+							if (retryDelay > 0) {
 								if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
-									delete req.msg.id;
+									delete packet.msg.id;
 								};
-								tools.callAsync(this.send, req.options.retryDelay, this, [
-									req.msg,
-									tools.extend({}, req.options, {worker: req.worker})
+								tools.callAsync(this.send, retryDelay, this, [
+									packet.msg,
+									tools.extend({}, packet.options, {worker: packet.worker})
 								]);
-								if (req.options.ttl < minTTL) {
-									minTTL = req.options.ttl;
+								if (packet.msg.ttl < minTTL) {
+									minTTL = packet.msg.ttl;
 								};
 							} else {
-								const callback = req.options.callback;
-								const cancelable = req.__cancelable;
+								const callback = types.get(packet.options, 'callback', null);;
+								const cancelable = packet.request && packet.request.isCancelable();
 								if (callback || cancelable) {
-									try {
-										let reason = new types.TimeoutError("TTL expired.");
-										tools.callAsync(function() {
-											if (cancelable) {
-												try {
-													cancelable.cancel(reason);
-												} catch(o) {
+									const reason = new types.TimeoutError("TTL expired.");
+									const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
+									tools.callAsync(function() {
+										if (cancelable) {
+											packet.request.cancel(reason)
+												.nodeify(function(err, dummy) {
 													if (callback) {
-														reason = o;
-													} else {
-														throw o;
+														callback(err || reason, null, worker);
 													};
-												};
-											};
-											if (callback) {
-												const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
-												if (worker) {
-													callback(reason, null, worker);
-												};
-											};
-										}, -1, this);
-									} catch (ex) {
-										if (ex.bubble) {
-											throw ex;
+												})
+										} else if (callback) {
+											callback(reason, null, worker);
 										};
-									};
+									}, -1, this);
 								};
 							};
-						} else if (req.options.ttl - diff < minTTL) {
-							minTTL = req.options.ttl - diff;
+						} else if (packet.msg.ttl - diff < minTTL) {
+							minTTL = packet.msg.ttl - diff;
 						};
 					};
 					if (minTTL !== this.__purgeMinTTL) {
@@ -297,39 +289,28 @@ exports.add = function add(DD_MODULES) {
 							if (types.has(ids, i)) {
 								const id = ids[i];
 								if (types.has(this.__pending, id)) {
-									const req = this.__pending[id]
+									const packet = this.__pending[id]
 									delete this.__pending[id];
-									const callback = req.options.callback;
-									const cancelable = req.__cancelable;
+									const callback = packet.options.callback;
+									const cancelable = packet.request && packet.request.isCancelable();
 									if (callback || cancelable) {
 										if (types.isNothing(reason)) {
 											reason = new types.CanceledError();
 										};
-										try {
-											tools.callAsync(function() {
-												if (cancelable) {
-													try {
-														cancelable.cancel(reason);
-													} catch(o) {
+										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
+										tools.callAsync(function() {
+											if (cancelable) {
+												packet.request.cancel(reason)
+													.nodeify(function(err, dummy) {
 														if (callback) {
-															reason = o;
-														} else {
-															throw o;
+															callback(err || reason, null, worker);
 														};
-													};
-												};
-												if (callback) {
-													const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
-													if (worker) {
-														callback(reason, null, worker);
-													};
-												};
-											}, -1, this);
-										} catch (ex) {
-											if (ex.bubble) {
-												throw ex;
+													})
+													.catch(tools.catchAndExit);
+											} else if (callback) {
+												callback(reason, null, worker);
 											};
-										};
+										}, -1, this);
 									};
 								};
 							};
@@ -377,51 +358,43 @@ exports.add = function add(DD_MODULES) {
 						const emitter = emitters[i],
 							worker = workers[i];
 						if (emitter && worker) {
-							let reqMsg = msg;
-							if (emitters.length > 1) {
-								reqMsg = tools.extend({}, msg);
+							const packet = this.createPacket(msg, options);
+							if (!packet.msg.id) {
+								packet.msg.id = this.createId();
 							};
-							let reqId = id;
-							if (!reqId) {
-								reqMsg.id = reqId = this.createId();
-							};
-							const req = tools.nullObject({
-								msg: reqMsg,
-								worker: worker.id,
-								options: options,
-							});
-							const proceedCallback = function(req) {
+							packet.msg.ttl = ttl;
+							packet.worker = worker.id;
+							const proceedCallback = function(packet) {
 								return doodad.Callback(this, function(result) {
-									req.proceedTime = process.hrtime();
-									if (noResponse && req.options.callback) {
-										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
+									packet.proceedTime = process.hrtime();
+									if (noResponse && packet.options.callback) {
+										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
 										if (worker) {
-											req.options.callback(null, result, worker);
+											packet.options.callback(null, result, worker);
 										};
 									};
 								});
 							};
-							req.msg.ttl = ttl;
-							const result = emitter.send(req.msg, null, proceedCallback(req));
+							const result = emitter.send(packet.msg, null, proceedCallback(packet));
 							if (result) {
 								if (!noResponse) {
-									req.time = process.hrtime();
-									this.__pending[reqId] = req;
-									ids.push(reqId);
+									packet.time = process.hrtime();
+									this.__pending[packet.msg.id] = packet;
+									ids.push(packet.msg.id);
 									this.purgePending();
 								};
 							} else {
 								if (retryDelay > 0) {
 									if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
-										delete req.msg.id;
+										delete msg.id;
 									};
 									tools.callAsync(this.send, retryDelay, this, [
-										req.msg,
-										tools.extend({}, req.options, {worker: req.worker})
+										msg,
+										tools.extend({}, options, {worker: packet.worker})
 									]);
 								} else {
 									if (callback) {
-										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
+										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
 										if (worker) {
 											tools.callAsync(function() {
 												callback(new cluster.QueueLimitReached(), null, worker);
@@ -552,14 +525,15 @@ exports.add = function add(DD_MODULES) {
 										.catch(tools.catchAndExit);
 
 									if (msg.type === cluster.ClusterMessageTypes.Request) {
-										this.__pending[id] = {
-											msg: msg,
-											options: {
-												ttl: msg.ttl || this.defaultTTL, // TODO: Limit TTL
-											},
-											time: process.hrtime(),
-											promise: promise,
-										};
+										types.getDefault(msg, 'ttl', this.defaultTTL);
+
+										const packet = this.createPacket(msg, null);
+
+										packet.request = rpcRequest;
+										packet.time = process.hrtime();
+										packet.promise = promise;
+
+										this.__pending[id] = packet;
 
 										this.purgePending();
 									};
@@ -574,11 +548,11 @@ exports.add = function add(DD_MODULES) {
 							};
 						} else if (type === cluster.ClusterMessageTypes.Response) {
 							if (id && types.has(this.__pending, id)) {
-								const req = this.__pending[id];
+								const packet = this.__pending[id];
 								delete this.__pending[id];
-								const callback = types.get(req.options, 'callback');
+								const callback = packet.options.callback;
 								if (callback) {
-									const worker = (nodeClusterIsMaster ? nodeClusterWorkers[req.worker] : nodeClusterWorker);
+									const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
 									if (worker) {
 										const result = doodad.PackedValue.$unpack(msg.result);
 										callback(null, result, worker);
@@ -587,13 +561,10 @@ exports.add = function add(DD_MODULES) {
 							};
 						} else if (type === cluster.ClusterMessageTypes.Ping) {
 							if (nodeClusterIsWorker) {
-								this.__pending[id] = {
-									msg: msg,
-									options: {
-										ttl: msg.ttl || this.defaultTTL, // TODO: Limit TTL
-									},
-									time: process.hrtime(),
-								};;
+								types.getDefault(msg, 'ttl', this.defaultTTL);
+								const packet = this.createPacket(msg, null);
+								packet.time = process.hrtime();
+								this.__pending[id] = packet;
 								this.send({
 									id: id,
 									type: cluster.ClusterMessageTypes.Pong,
@@ -601,13 +572,13 @@ exports.add = function add(DD_MODULES) {
 							};
 						} else if (type === cluster.ClusterMessageTypes.Pong) {
 							if (nodeClusterIsMaster && id && types.has(this.__pending, id)) {
-								const req = this.__pending[id];
+								const packet = this.__pending[id];
 								delete this.__pending[id];
-								const callback = types.get(req.options, 'callback');
+								const callback = packet.options.callback;
 								if (callback) {
-									const worker = nodeClusterWorkers[req.worker];
+									const worker = nodeClusterWorkers[packet.worker];
 									if (worker) {
-										const time = process.hrtime(req.proceedTime);
+										const time = process.hrtime(packet.proceedTime);
 										callback(null, (time[0] + (time[1] / 1e9)) * 1e3, worker);
 									};
 								};
@@ -616,7 +587,7 @@ exports.add = function add(DD_MODULES) {
 							const message = types.get(msg, 'message');
 							if (nodeClusterIsMaster && message) {
 								const messageType = types.get(msg, 'messageType', 'log');
-								if (['log', 'info', 'warn', 'error', 'exception'].indexOf(messageType) >= 0) {
+								if (['log', 'info', 'warn', 'error'].indexOf(messageType) >= 0) {
 									const fn = global.console[messageType];
 									fn.call(global.console, message);
 								};
