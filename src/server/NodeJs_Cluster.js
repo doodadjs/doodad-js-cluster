@@ -140,10 +140,16 @@ exports.add = function add(DD_MODULES) {
 			}));
 				
 
-			cluster.REGISTER(types.createErrorType('QueueLimitReached', ipc.Error, function _super(/*optional*/message, /*optional*/params) {
-				return [message || "Message queue limit reached.", params];
-			}, null, null, null, /*! REPLACE_BY(TO_SOURCE(UUID('QueueLimitReached')), true) */ null /*! END_REPLACE() */));
-				
+			cluster.REGISTER(ipc.Error.$inherit({
+				$TYPE_NAME: 'QueueLimitReached',
+				$TYPE_UUID: /*! REPLACE_BY(TO_SOURCE(UUID('QueueLimitReached')), true) */ null /*! END_REPLACE() */,
+
+				[types.ConstructorSymbol](/*optional*/message, /*optional*/params) {
+					return [message || "Message queue limit reached.", params];
+				},
+			}));
+
+
 			cluster.REGISTER(doodad.Object.$extend(
 								ipcInterfaces.IServer,
 								ipcMixIns.IClient,
@@ -393,7 +399,7 @@ exports.add = function add(DD_MODULES) {
 								};
 							};
 						} else {
-							throw new ipc.Error("Invalid request.");
+							throw new ipc.InvalidRequest("Missing destination.");
 						};
 					};
 					return ids;
