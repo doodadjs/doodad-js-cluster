@@ -1,5 +1,5 @@
 {
-  "name": "doodad-js-cluster",
+  "name": "@doodad-js/cluster",
   "description": "Cluster manager (alpha)",
   "version": "0.0.0",
   "files": [

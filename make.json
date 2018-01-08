@@ -27,25 +27,25 @@
 	"stage": "a",
 	"dependencies": [
 		{
-			"name": "doodad-js",
+			"name": "@doodad-js/core",
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
-			"name": "doodad-js-io",
+			"name": "@doodad-js/io",
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
-			"name": "doodad-js-server",
+			"name": "@doodad-js/server",
 			"client": false,
 			"server": true,
 			"browserify": false
 		},
 		{
-			"name": "doodad-js-ipc",
+			"name": "@doodad-js/ipc",
 			"client": false,
 			"server": true,
 			"browserify": false
