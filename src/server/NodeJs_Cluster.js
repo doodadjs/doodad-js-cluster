@@ -47,7 +47,7 @@ exports.add = function add(DD_MODULES) {
 			const doodad = root.Doodad,
 				types = doodad.Types,
 				tools = doodad.Tools,
-				files = tools.Files,
+				//files = tools.Files,
 				namespaces = doodad.Namespaces,
 				mixIns = doodad.MixIns,
 				//interfaces = doodad.Interfaces,
@@ -84,7 +84,7 @@ exports.add = function add(DD_MODULES) {
 					
 				__ended: doodad.PROTECTED(false),
 					
-				create: doodad.OVERRIDE(function(msg, server, /*optional*/session) {
+				create: doodad.OVERRIDE(function create(msg, server, /*optional*/session) {
 					if (root.DD_ASSERT) {
 						root.DD_ASSERT(types.isObject(msg), "Invalid message.");
 					};
@@ -108,6 +108,7 @@ exports.add = function add(DD_MODULES) {
 									}, null, this);
 							};
 						};
+						return undefined;
 					}, this)						
 					.catch(function(err) {
 						return this.server.sendAsync({
@@ -136,6 +137,8 @@ exports.add = function add(DD_MODULES) {
 
 						return this.end(ex);
 					};
+
+					return undefined;
 				}),
 			}));
 				
@@ -224,7 +227,6 @@ exports.add = function add(DD_MODULES) {
 				}),
 
 				purgePending: doodad.PROTECTED(function purgePending() {
-					const Promise = types.getPromise();
 					const ids = types.keys(this.__pending);
 					const toCancelIds = [];
 					let minTTL = this.__purgeMinTTL || this.defaultTTL;
@@ -278,36 +280,39 @@ exports.add = function add(DD_MODULES) {
 						if (!types.isArray(ids)) {
 							ids = [ids];
 						};
-						for (let i = 0; i < ids.length; i++) {
-							if (types.has(ids, i)) {
-								const id = ids[i];
-								if (types.has(this.__pending, id)) {
-									const packet = this.__pending[id]
-									delete this.__pending[id];
-									const callback = packet.options.callback;
-									const cancelable = packet.request && packet.request.isCancelable();
-									if (callback || cancelable) {
-										if (types.isNothing(reason)) {
-											reason = new types.CanceledError();
-										};
-										const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
-										tools.callAsync(function() {
+						tools.callAsync(function() {
+							const createCallbackHandler = function _createCallbackHandler(callback, reason, worker) {
+								return function callCallback(err, dummy) {
+									if (callback) {
+										callback(err || reason, null, worker);
+									};
+								};
+							};
+							for (let i = 0; i < ids.length; i++) {
+								if (types.has(ids, i)) {
+									const id = ids[i];
+									if (types.has(this.__pending, id)) {
+										const packet = this.__pending[id];
+										delete this.__pending[id];
+										const callback = packet.options.callback;
+										const cancelable = packet.request && packet.request.isCancelable();
+										if (callback || cancelable) {
+											if (types.isNothing(reason)) {
+												reason = new types.CanceledError();
+											};
+											const worker = (nodeClusterIsMaster ? nodeClusterWorkers[packet.worker] : nodeClusterWorker);
 											if (cancelable) {
 												packet.request.cancel(reason)
-													.nodeify(function(err, dummy) {
-														if (callback) {
-															callback(err || reason, null, worker);
-														};
-													})
+													.nodeify(createCallbackHandler(callback, reason, worker))
 													.catch(tools.catchAndExit);
 											} else if (callback) {
 												callback(reason, null, worker);
 											};
-										}, -1, this);
+										};
 									};
 								};
 							};
-						};
+						}, -1, this);
 					};
 				}),
 
@@ -408,7 +413,7 @@ exports.add = function add(DD_MODULES) {
 				sendAsync: doodad.PUBLIC(doodad.ASYNC(function sendAsync(msg, /*optional*/options) {
 					const Promise = types.getPromise();
 					const type = types.get(msg, 'type');
-					const worker = types.get(options, 'worker');
+					//const worker = types.get(options, 'worker');
 					if (type === cluster.ClusterMessageTypes.Notify) {
 						this.send(msg, options);
 					} else {
@@ -451,6 +456,7 @@ exports.add = function add(DD_MODULES) {
 							state.count = state.ids.length;
 						}, this);
 					};
+					return undefined;
 				})),
 
 				callMethod: doodad.OVERRIDE(function callMethod(method, /*optional*/args, /*optional*/options) {
@@ -468,6 +474,7 @@ exports.add = function add(DD_MODULES) {
 							type: cluster.ClusterMessageTypes.Ping,
 						}, options);
 					};
+					return undefined;
 				}),
 					
 				disconnect: doodad.OVERRIDE(function disconnect() {
@@ -502,7 +509,7 @@ exports.add = function add(DD_MODULES) {
 									const promise = service.execute(rpcRequest, method, params)
 										.nodeify(function endRequestPromise(err, result) {
 											return rpcRequest.end(err || result)
-												.nodeify(function(err2, dummy) {
+												.nodeify(function throwErr(err2, dummy) {
 													if (err || err2) {
 														throw err || err2;
 													};
@@ -590,7 +597,6 @@ exports.add = function add(DD_MODULES) {
 				}),
 					
 					
-					
 				// Console hook
 				log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
 					if (raw && nodeClusterIsWorker) {
@@ -632,7 +638,6 @@ exports.add = function add(DD_MODULES) {
 					};
 				}),
 			}));
-				
 				
 				
 			//return function init(/*optional*/options) {
