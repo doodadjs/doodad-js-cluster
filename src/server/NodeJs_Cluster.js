@@ -89,7 +89,7 @@ exports.add = function add(DD_MODULES) {
 						root.DD_ASSERT(types.isObject(msg), "Invalid message.");
 					};
 					this._super(server, session);
-					_shared.setAttribute(this, 'msg', msg);
+					types.setAttribute(this, 'msg', msg);
 				}),
 					
 				end: doodad.OVERRIDE(function end(/*optional*/result) {
@@ -185,7 +185,7 @@ exports.add = function add(DD_MODULES) {
 
 					this._super();
 
-					_shared.setAttribute(this, 'service', service);
+					types.setAttribute(this, 'service', service);
 
 					this.__pending = tools.nullObject();
 				}),
