@@ -439,7 +439,12 @@ exports.add = function add(DD_MODULES) {
 									state.timeoutId = null;
 								};
 								state.count--;
-								state.result[worker.id] = err || res;
+								// NOTE: "worker" can be undefined when the worker has crashed !
+								if (worker) {
+									state.result[worker.id] = err || res;
+								} else {
+									state.hasError = true;
+								};
 								if (err || types.isError(res)) {
 									state.hasError = true;
 								};
