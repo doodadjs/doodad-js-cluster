@@ -39,9 +39,9 @@ const nodeClusterIsMaster = nodeCluster.isMaster,
 	nodeClusterWorkers = nodeCluster.workers;
 
 
-exports.add = function add(DD_MODULES) {
-	DD_MODULES = (DD_MODULES || {});
-	DD_MODULES['Doodad.NodeJs.Cluster'] = {
+exports.add = function add(modules) {
+	modules = (modules || {});
+	modules['Doodad.NodeJs.Cluster'] = {
 		version: /*! REPLACE_BY(TO_SOURCE(VERSION(MANIFEST("name")))) */ null /*! END_REPLACE()*/,
 		create: function create(root, /*optional*/_options, _shared) {
 			const doodad = root.Doodad,
@@ -649,7 +649,7 @@ exports.add = function add(DD_MODULES) {
 			//};
 		},
 	};
-	return DD_MODULES;
+	return modules;
 };
 
 //! END_MODULE()
