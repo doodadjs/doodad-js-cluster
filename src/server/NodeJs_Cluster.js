@@ -64,8 +64,8 @@ exports.add = function add(modules) {
 				//nodejsIO = nodejs.IO,
 				//nodejsServer = nodejs.Server,
 				cluster = nodejs.Cluster;
-					
-				
+
+
 			cluster.ADD('ClusterMessageTypes', types.freezeObject(tools.nullObject({
 				Request: 0,
 				Response: 1,
@@ -79,11 +79,11 @@ exports.add = function add(modules) {
 			{
 				$TYPE_NAME: 'ClusterMessengerRequest',
 				$TYPE_UUID: '' /*! INJECT('+' + TO_SOURCE(UUID('ClusterMessengerRequest')), true) */,
-					
+
 				msg: doodad.PUBLIC(doodad.READ_ONLY(  null  )),
-					
+
 				__ended: doodad.PROTECTED(false),
-					
+
 				create: doodad.OVERRIDE(function create(msg, server, /*optional*/session) {
 					if (root.DD_ASSERT) {
 						root.DD_ASSERT(types.isObject(msg), "Invalid message.");
@@ -91,7 +91,7 @@ exports.add = function add(modules) {
 					this._super(server, session);
 					types.setAttribute(this, 'msg', msg);
 				}),
-					
+
 				end: doodad.OVERRIDE(function end(/*optional*/result) {
 					const Promise = types.getPromise();
 					return Promise.try(function tryEnd() {
@@ -109,7 +109,7 @@ exports.add = function add(modules) {
 							};
 						};
 						return undefined;
-					}, this)						
+					}, this)
 					.catch(function(err) {
 						return this.server.sendAsync({
 							id: this.msg.id,
@@ -141,7 +141,7 @@ exports.add = function add(modules) {
 					return undefined;
 				}),
 			}));
-				
+
 
 			cluster.REGISTER(ipc.Error.$inherit({
 				$TYPE_NAME: 'QueueLimitReached',
@@ -163,7 +163,7 @@ exports.add = function add(modules) {
 				$TYPE_UUID: '' /*! INJECT('+' + TO_SOURCE(UUID('ClusterMessenger')), true) */,
 
 				defaultTTL: doodad.PUBLIC(  1000 * 60 * 60 * 2  ),  // Time To Live (milliseconds)
-					
+
 				__pending: doodad.PROTECTED(  null  ),
 				__purgeMinTTL: doodad.PROTECTED(  null  ),
 				__purgeTimeoutID: doodad.PROTECTED(  null  ),
@@ -409,7 +409,7 @@ exports.add = function add(modules) {
 					};
 					return ids;
 				}),
-					
+
 				sendAsync: doodad.PUBLIC(doodad.ASYNC(function sendAsync(msg, /*optional*/options) {
 					const Promise = types.getPromise();
 					const type = types.get(msg, 'type');
@@ -472,7 +472,7 @@ exports.add = function add(modules) {
 						params: doodad.PackedValue.$pack(args),
 					}, options);
 				}),
-					
+
 				ping: doodad.PUBLIC(function ping(/*optional*/options) {
 					if (nodeClusterIsMaster) {
 						return this.sendAsync({
@@ -481,7 +481,7 @@ exports.add = function add(modules) {
 					};
 					return undefined;
 				}),
-					
+
 				disconnect: doodad.OVERRIDE(function disconnect() {
 					this.onNodeMessage.clear();
 				}),
@@ -600,8 +600,8 @@ exports.add = function add(modules) {
 						};
 					};
 				}),
-					
-					
+
+
 				// Console hook
 				log: doodad.OVERRIDE(ioInterfaces.IConsole, function log(raw, /*optional*/options) {
 					if (raw && nodeClusterIsWorker) {
@@ -643,8 +643,8 @@ exports.add = function add(modules) {
 					};
 				}),
 			}));
-				
-				
+
+
 			//return function init(/*optional*/options) {
 			//};
 		},
