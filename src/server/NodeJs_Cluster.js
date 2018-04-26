@@ -339,13 +339,16 @@ exports.add = function add(modules) {
 							workers;
 						if (nodeClusterIsMaster) {
 							if (!id && types.isNothing(worker)) {
-								workers = emitters = types.values(nodeClusterWorkers);
+								workers = types.values(nodeClusterWorkers);
+								emitters = workers;
 							} else if (types.isInteger(worker)) {
-								workers = emitters = [nodeClusterWorkers[worker]];
+								workers = [nodeClusterWorkers[worker]];
+								emitters = workers;
 							} else if (!types.isArray(worker)) {
-							// TODO: "worker instanceof ???" if possible
+								// TODO: "worker instanceof ???" if possible
 								root.DD_ASSERT && root.DD_ASSERT(types.isObject(worker), "Invalid worker.");
-								workers = emitters = [worker];
+								workers = [worker];
+								emitters = workers;
 							};
 						} else {
 							emitters = [process];
