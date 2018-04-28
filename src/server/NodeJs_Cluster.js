@@ -454,7 +454,7 @@ exports.add = function add(modules) {
 									if (state.count <= 0) {
 										state.count = Infinity; // Prevents the following to be executed twice
 										if (rejectOnError && state.hasError) {
-										// TODO: Should we box into an "SomethingError" object (where "Something" is replaced by a more appropriated word) ?
+											// TODO: Should we box into an "SomethingError" object (where "Something" is replaced by a more appropriated word) ?
 											reject(state.result);
 										} else {
 											resolve(state.result);
@@ -490,7 +490,7 @@ exports.add = function add(modules) {
 					}),
 
 					onNodeMessage: doodad.NODE_EVENT('message', function onNodeMessage(context, /*optional*/worker, msg, handle) {
-					// <PRB> Since Node.Js 6.0, a new argument ("worker") has been PREPENDED.
+						// <PRB> Since Node.Js 6.0, a new argument ("worker") has been PREPENDED.
 						if (arguments.length <= 3) {
 							handle = msg;
 							msg = worker;
