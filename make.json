@@ -24,7 +24,7 @@
 //    limitations under the License.
 //
 {
-	version: "4.0.0",
+	version: "4.1.0",
 	stage: "a",
 	dependencies: [
 		{
