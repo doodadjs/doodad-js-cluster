@@ -120,7 +120,7 @@ exports.add = function add(modules) {
 							.then(function thenThrow(dummy) {
 								// NOTE: 'end' must always throws 'EndOfRequest' when not rejected.
 								throw new server.EndOfRequest();
-							});
+							}, this);
 					}),
 
 					respondWithError: doodad.OVERRIDE(function respondWithError(ex) {
@@ -523,7 +523,7 @@ exports.add = function add(modules) {
 														};
 													});
 											})
-											.catch(rpcRequest.catchError)
+											.catch(rpcRequest.catchError, rpcRequest)
 											.nodeify(function cleanupRequestPromise(err, dummy) {
 												types.DESTROY(rpcRequest);
 												if (err) {
