@@ -4,7 +4,14 @@ build
 dist
 test
 config.json
+index.js
+index.mjs
+package.json
 webpack.config.js
+
+# Travis scripts
+.curbranch
+.lastrev
 
 # Logs
 logs
