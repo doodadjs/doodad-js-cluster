@@ -329,11 +329,15 @@ exports.add = function add(modules) {
 							if (id) {
 								throw new types.Error("Invalid message ID.");
 							};
-						} else if ((type === cluster.ClusterMessageTypes.Response) || (type === cluster.ClusterMessageTypes.Pong)) {
+						} else if (type === cluster.ClusterMessageTypes.Response) {
 							if (!id || !(id in this.__pending)) {
 								return [];
 							};
 							delete this.__pending[id];
+						} else if (type === cluster.ClusterMessageTypes.Pong) {
+							if (!id) {
+								return [];
+							};
 						};
 						let emitters,
 							workers;
@@ -569,10 +573,6 @@ exports.add = function add(modules) {
 								};
 							} else if (type === cluster.ClusterMessageTypes.Ping) {
 								if (nodeClusterIsWorker) {
-									types.getDefault(msg, 'ttl', this.defaultTTL);
-									const packet = this.createPacket(true, msg, null);
-									packet.time = process.hrtime();
-									this.__pending[id] = packet;
 									this.send({
 										id: id,
 										type: cluster.ClusterMessageTypes.Pong,
