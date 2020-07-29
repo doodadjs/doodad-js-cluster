@@ -327,7 +327,7 @@ exports.add = function add(modules) {
 							id = types.get(msg, 'id');
 						if ((type === cluster.ClusterMessageTypes.Request) || (type === cluster.ClusterMessageTypes.Ping)) {
 							if (id) {
-								throw new types.Error("Invalid message ID.");
+								throw new types.ValueError("Invalid message ID.");
 							};
 						} else if (type === cluster.ClusterMessageTypes.Response) {
 							if (!id || !(id in this.__pending)) {
