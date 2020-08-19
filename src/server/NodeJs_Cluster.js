@@ -499,9 +499,9 @@ exports.add = function add(modules) {
 							handle = msg;
 							msg = worker;
 							worker = undefined;
-							//console.log(tools.toSource(msg, 15));
+							//console.log(tools.toSource(msg, {depth: 15}));
 						} else {
-							//console.log(tools.toSource(msg, 15));
+							//console.log(tools.toSource(msg, {depth: 15}));
 							msg.worker = worker;
 						};
 						if (nodeClusterIsMaster && !worker) {
